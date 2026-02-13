@@ -20,8 +20,11 @@ Multi-service local development environment. Orchestrate services, infrastructur
 ## Quick Start
 
 ```bash
-# Install globally
-bun install -g @lo1/cli
+# Install globally (pick your package manager)
+bun install -g @lo1/cli   # Bun
+npm install -g @lo1/cli    # npm
+yarn global add @lo1/cli   # Yarn
+pnpm add -g @lo1/cli       # pnpm
 
 # Initialize a workspace (clones repositories, sets up infrastructure)
 lo1 init
