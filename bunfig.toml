@@ -1,0 +1,14 @@
+[test]
+coverageSkipTestFiles = true
+coverageReporter = ["text", "lcov"]
+coveragePathIgnorePatterns = [
+  "**/*.test.ts",
+  "packages/*/dist/**",
+  "*.config.js",
+  "generated/**"
+]
+coverageThreshold = {
+  lines = 0.8,      # 80% line coverage
+  functions = 0.8,  # 80% function coverage
+  statements = 0.8  # 80% statement coverage
+}
