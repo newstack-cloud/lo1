@@ -1,0 +1,6 @@
+#!/bin/sh
+# Only lint if package source changed
+CHANGED=$(git diff HEAD --name-only --cached | grep "^packages/\|^plugins/")
+if [ -n "$CHANGED" ]; then
+  bun run lint && bun run format:check
+fi

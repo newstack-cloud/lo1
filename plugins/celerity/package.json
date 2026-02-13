@@ -1,0 +1,21 @@
+{
+  "name": "@lo1/plugin-celerity",
+  "version": "0.1.0",
+  "description": "Celerity plugin for lo1 — blueprint-driven compose, provisioning, seeding, and runtime",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun && bun x tsc --emitDeclarationOnly --outDir ./dist",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@lo1/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

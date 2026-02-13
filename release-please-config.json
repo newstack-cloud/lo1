@@ -1,0 +1,27 @@
+{
+  "include-component-in-tag": true,
+  "tag-separator": "/",
+  "separate-pull-requests": true,
+  "bump-minor-pre-major": true,
+  "prerelease-type": "alpha",
+  "changelog-sections": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug Fixes" },
+    { "type": "perf", "section": "Performance Improvements" },
+    { "type": "deps", "section": "Dependencies" },
+    { "type": "chore", "section": "Miscellaneous", "hidden": true }
+  ],
+  "pull-request-title-pattern": "chore: release ${component} ${version}",
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "lo1",
+      "components": ["cli", "sdk", "plugin-celerity"]
+    }
+  ],
+  "packages": {
+    "packages/cli": { "component": "cli", "release-type": "node" },
+    "packages/sdk": { "component": "sdk", "release-type": "node" },
+    "plugins/celerity": { "component": "plugin-celerity", "release-type": "node" }
+  }
+}

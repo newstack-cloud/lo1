@@ -1,0 +1,33 @@
+{
+  "name": "@lo1/sdk",
+  "version": "0.1.0",
+  "description": "Plugin SDK for lo1 — types, config schemas, and utilities for plugin authors",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./schemas/lo1.v1.schema.json": "./schemas/lo1.v1.schema.json"
+  },
+  "files": ["dist", "schemas"],
+  "scripts": {
+    "build": "bun run build:ts && bun run build:schema",
+    "build:ts": "bun build ./src/index.ts --outdir ./dist --target bun && tsc --emitDeclarationOnly --outDir ./dist",
+    "build:schema": "bun run ./src/schema/generate.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "zod-to-json-schema": "^3.23.0",
+    "ajv": "^8.17.0",
+    "ajv-formats": "^3.0.0"
+  }
+}

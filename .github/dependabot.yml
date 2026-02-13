@@ -1,0 +1,79 @@
+version: 2
+updates:
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Root dependencies (tooling)
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:30"
+    commit-message:
+      prefix: "deps"
+    groups:
+      root-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "@lo1/*"
+
+  # packages/cli
+  - package-ecosystem: npm
+    directory: /packages/cli
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:30"
+    commit-message:
+      prefix: "deps(cli)"
+    groups:
+      cli-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "@lo1/*"
+
+  # packages/sdk
+  - package-ecosystem: npm
+    directory: /packages/sdk
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:30"
+    commit-message:
+      prefix: "deps(sdk)"
+    groups:
+      sdk-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "@lo1/*"
+
+  # plugins/celerity
+  - package-ecosystem: npm
+    directory: /plugins/celerity
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:30"
+    commit-message:
+      prefix: "deps(plugin-celerity)"
+    groups:
+      plugin-celerity-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "@lo1/*"

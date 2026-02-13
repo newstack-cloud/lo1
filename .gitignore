@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.lo1/
+*.tsbuildinfo
+eslint-report.json
+*.log
+.DS_Store

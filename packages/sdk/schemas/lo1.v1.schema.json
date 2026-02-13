@@ -1,0 +1,188 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lo1.dev/schemas/lo1.v1.schema.json",
+  "$ref": "#/definitions/lo1.v1",
+  "definitions": {
+    "lo1.v1": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "1"
+        },
+        "name": {
+          "type": "string"
+        },
+        "plugins": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "repositories": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "url",
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "proxy": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "port": {
+              "type": "number",
+              "default": 80
+            },
+            "tld": {
+              "type": "string",
+              "default": "local"
+            },
+            "tls": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "port": {
+                  "type": "number",
+                  "default": 443
+                },
+                "certDir": {
+                  "type": "string",
+                  "default": ".lo1/certs"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "services": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "port": {
+                "type": "number"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "dev",
+                  "container",
+                  "skip"
+                ],
+                "default": "dev"
+              },
+              "command": {
+                "type": "string"
+              },
+              "containerImage": {
+                "type": "string"
+              },
+              "plugin": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "compose": {
+                "type": "string"
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "proxy": {
+                "type": "object",
+                "properties": {
+                  "domain": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "hooks": {
+                "type": "object",
+                "properties": {
+                  "preStart": {
+                    "type": "string"
+                  },
+                  "postStart": {
+                    "type": "string"
+                  },
+                  "preStop": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              }
+            },
+            "required": [
+              "type",
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "extraCompose": {
+          "type": "string"
+        },
+        "hooks": {
+          "type": "object",
+          "properties": {
+            "postInfrastructure": {
+              "type": "string"
+            },
+            "postSetup": {
+              "type": "string"
+            },
+            "preStop": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "name",
+        "services"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
