@@ -7,7 +7,7 @@
   "types": "./dist/index.d.ts",
   "files": ["dist"],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target bun && bun x tsc --emitDeclarationOnly --outDir ./dist",
+    "build": "bun build ./src/index.ts --outdir ./dist --target node && bun x tsc --emitDeclarationOnly --outDir ./dist",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "test": "bun test"

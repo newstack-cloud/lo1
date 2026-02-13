@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import createPlugin from "./index";
+import createPlugin from "../src/index";
 import { Plugin } from "@lo1/sdk";
 
 describe("celerity plugin", () => {
