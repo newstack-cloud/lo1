@@ -5,7 +5,10 @@ CLI for [lo1](../../README.md) — multi-service local development environment.
 ## Installation
 
 ```bash
-bun install -g @lo1/cli
+bun install -g @lo1/cli    # Bun
+npm install -g @lo1/cli    # npm
+yarn global add @lo1/cli   # Yarn
+pnpm add -g @lo1/cli       # pnpm
 ```
 
 ## Commands

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { program } from "./index";
+import { program } from "../../src/cli/index";
 
 describe("cli", () => {
   test("program has expected commands", () => {

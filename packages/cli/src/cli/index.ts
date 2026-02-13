@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { Command } from "commander";
 import { initCommand } from "./commands/init";
 import { upCommand } from "./commands/up";
