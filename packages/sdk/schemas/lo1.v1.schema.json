@@ -124,6 +124,9 @@
                 "properties": {
                   "domain": {
                     "type": "string"
+                  },
+                  "pathPrefix": {
+                    "type": "string"
                   }
                 },
                 "additionalProperties": false

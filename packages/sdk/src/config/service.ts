@@ -3,6 +3,7 @@ import { serviceHooksSchema } from "./hooks";
 
 export const serviceProxySchema = z.object({
   domain: z.string().optional(),
+  pathPrefix: z.string().optional(),
 });
 
 export type ServiceProxy = z.infer<typeof serviceProxySchema>;

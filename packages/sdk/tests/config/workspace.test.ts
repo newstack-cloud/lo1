@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { workspaceSchema } from "./workspace";
+import { workspaceSchema } from "../../src/config/workspace";
 
 describe("workspaceSchema", () => {
   test("parses a minimal valid config", () => {
