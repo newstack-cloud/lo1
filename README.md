@@ -1,6 +1,6 @@
 # lo1
 
-[![CI](https://github.com/two-six-tech/lo1/actions/workflows/ci.yml/badge.svg)](https://github.com/two-six-tech/lo1/actions/workflows/ci.yml)
+[![CI](https://github.com/newstack-cloud/lo1/actions/workflows/ci.yml/badge.svg)](https://github.com/newstack-cloud/lo1/actions/workflows/ci.yml)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=newstack-cloud_lo1&metric=coverage)](https://sonarcloud.io/summary/new_code?id=newstack-cloud_lo1)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=newstack-cloud_lo1&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=newstack-cloud_lo1)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=newstack-cloud_lo1&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=newstack-cloud_lo1)
