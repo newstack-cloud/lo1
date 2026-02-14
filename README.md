@@ -59,13 +59,13 @@ name: my-project
 
 services:
   api:
-    type: process
+    type: service
     path: ./services/api
     port: 3000
     command: bun run dev
 
   frontend:
-    type: frontend
+    type: app
     path: ./services/web
     port: 5173
     command: bun run dev
