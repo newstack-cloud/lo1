@@ -23,6 +23,8 @@ mock.module("node:child_process", () => ({
       .then((result) => cb(null, result.stdout, result.stderr))
       .catch((err) => cb(err));
   },
+  // Provide spawn stub so other modules importing from node:child_process don't break
+  spawn: () => {},
 }));
 
 // Import after mock setup
