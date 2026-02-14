@@ -91,6 +91,9 @@
               "port": {
                 "type": "number"
               },
+              "hostPort": {
+                "type": "number"
+              },
               "mode": {
                 "type": "string",
                 "enum": [

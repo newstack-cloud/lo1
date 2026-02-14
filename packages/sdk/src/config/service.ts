@@ -12,6 +12,7 @@ export const serviceConfigSchema = z.object({
   type: z.string(),
   path: z.string(),
   port: z.number().optional(),
+  hostPort: z.number().optional(),
   mode: z.enum(["dev", "container", "skip"]).default("dev"),
   command: z.string().optional(),
   containerImage: z.string().optional(),
