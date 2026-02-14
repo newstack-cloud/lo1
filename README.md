@@ -17,6 +17,16 @@ Multi-service local development environment. Orchestrate services, infrastructur
 | [`@lo1/sdk`](./packages/sdk) | Plugin SDK — types, config schemas, and utilities for plugin authors |
 | [`@lo1/plugin-celerity`](./plugins/celerity) | Celerity plugin — blueprint-driven compose, provisioning, and seeding |
 
+## Prerequisites
+
+| Dependency | Version | Purpose |
+|---|---|---|
+| [Node.js](https://nodejs.org/) | 22+ | CLI runtime |
+| [Docker](https://docs.docker.com/get-docker/) | 20.10+ | Container services, infrastructure, reverse proxy |
+| [Git](https://git-scm.com/) | 2.x | Repository cloning (`lo1 init`) |
+
+Docker Compose v2 is included with Docker Desktop (macOS/Windows) and modern Docker Engine (Linux).
+
 ## Quick Start
 
 ```bash
