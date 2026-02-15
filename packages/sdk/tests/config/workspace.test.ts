@@ -7,7 +7,7 @@ describe("workspaceSchema", () => {
       version: "1",
       name: "my-project",
       services: {
-        api: { type: "process", path: "./services/api", port: 3000 },
+        api: { type: "service", path: "./services/api", port: 3000 },
       },
     };
 
@@ -47,7 +47,7 @@ describe("workspaceSchema", () => {
       proxy: { enabled: true, tld: "test" },
       services: {
         api: {
-          type: "process",
+          type: "service",
           path: "./services/api",
           port: 8080,
           command: "npm run dev",
