@@ -16,6 +16,7 @@
   "scripts": {
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test",
+    "test:coverage": "bun scripts/check-coverage.ts",
     "lint": "eslint packages/ plugins/",
     "lint:fix": "eslint packages/ plugins/ --fix",
     "lint:report": "eslint packages/ plugins/ -f json -o eslint-report.json || true",

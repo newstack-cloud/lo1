@@ -31,8 +31,8 @@ jobs:
 
       - run: bun run typecheck
 
-      - name: Run all tests with coverage
-        run: bun test --coverage --coverage-reporter=lcov
+      - name: Run tests with coverage thresholds
+        run: bun run test:coverage
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v7

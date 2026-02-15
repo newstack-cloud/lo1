@@ -67,12 +67,18 @@ bun --filter @lo1/sdk run build
 # Run all tests
 bun test
 
-# Run tests with coverage
+# Run tests with aggregate coverage thresholds (same as CI)
+bun run test:coverage
+
+# Run tests with per-file coverage table (no threshold check)
 bun test --coverage
 
 # Run tests for a specific package
 bun --filter @lo1/sdk test
 ```
+
+Coverage thresholds are enforced at the **aggregate** level (not per-file) via
+`scripts/check-coverage.ts`. Edit the `THRESHOLDS` constant to adjust.
 
 ## Conventional Commits
 

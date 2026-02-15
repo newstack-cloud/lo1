@@ -5,10 +5,5 @@ coveragePathIgnorePatterns = [
   "**/*.test.ts",
   "packages/*/dist/**",
   "*.config.js",
-  "generated/**"
+  "generated/**",
 ]
-coverageThreshold = {
-  lines = 0.8,      # 80% line coverage
-  functions = 0.8,  # 80% function coverage
-  statements = 0.8  # 80% statement coverage
-}
