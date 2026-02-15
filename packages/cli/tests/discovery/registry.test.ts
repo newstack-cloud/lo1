@@ -57,13 +57,13 @@ describe("buildEndpointRegistry", () => {
     const config = makeConfig({
       services: {
         "no-port": {
-          type: "process",
+          type: "service",
           path: "./svc",
           mode: "dev",
           dependsOn: [],
         },
         "has-port": {
-          type: "process",
+          type: "service",
           path: "./svc",
           port: 3000,
           mode: "dev",
@@ -81,7 +81,7 @@ describe("buildEndpointRegistry", () => {
     const config = makeConfig({
       services: {
         skipped: {
-          type: "process",
+          type: "service",
           path: "./svc",
           port: 3000,
           mode: "skip",
@@ -133,7 +133,7 @@ describe("buildEndpointRegistry", () => {
     const config = makeConfig({
       services: {
         db: {
-          type: "process",
+          type: "service",
           path: "./services/db",
           port: 5432,
           hostPort: 15432,
@@ -181,7 +181,7 @@ describe("buildDiscoveryEnvVars", () => {
     const config = makeConfig({
       services: {
         db: {
-          type: "process",
+          type: "service",
           path: "./services/db",
           port: 5432,
           hostPort: 15432,
@@ -219,7 +219,7 @@ describe("translatePluginEnvVars", () => {
     const config = makeConfig({
       services: {
         db: {
-          type: "process",
+          type: "service",
           path: "./services/db",
           port: 5432,
           hostPort: 15432,

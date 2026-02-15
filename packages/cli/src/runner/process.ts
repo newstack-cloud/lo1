@@ -25,6 +25,7 @@ export type ProcessRunnerOptions = {
 
 export type ProcessHandle = {
   serviceName: string;
+  readonly pid: number | undefined;
   readonly running: boolean;
   stop(timeoutMs?: number): Promise<number | null>;
   readonly exitPromise: Promise<number | null>;
@@ -125,6 +126,9 @@ export function startProcess(
 
   return {
     serviceName: options.serviceName,
+    get pid() {
+      return child.pid;
+    },
     get running() {
       return isRunning;
     },

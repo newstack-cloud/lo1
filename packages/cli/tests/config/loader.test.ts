@@ -21,7 +21,7 @@ describe("loadWorkspaceConfig", () => {
       version: "1",
       name: "test-workspace",
       services: {
-        api: { type: "process", path: "./api" },
+        api: { type: "service", path: "./api" },
       },
     };
     const configPath = join(TEST_DIR, "lo1.yaml");
@@ -33,7 +33,7 @@ describe("loadWorkspaceConfig", () => {
     // Assert
     expect(result.name).toBe("test-workspace");
     expect(result.version).toBe("1");
-    expect(result.services.api.type).toBe("process");
+    expect(result.services.api.type).toBe("service");
   });
 
   it("should load a full config with all optional fields", async () => {
@@ -51,7 +51,7 @@ describe("loadWorkspaceConfig", () => {
       },
       services: {
         api: {
-          type: "process",
+          type: "service",
           path: "./services/api",
           port: 3000,
           command: "npm run dev",
@@ -86,7 +86,7 @@ describe("loadWorkspaceConfig", () => {
       version: "1",
       name: "defaults-test",
       services: {
-        api: { type: "process", path: "./api" },
+        api: { type: "service", path: "./api" },
       },
     };
     const configPath = join(TEST_DIR, "lo1.yaml");

@@ -10,7 +10,7 @@ function makeConfig(
   const svcEntries = Object.fromEntries(
     Object.entries(services).map(([name, svc]) => [
       name,
-      { type: "process", path: `./${name}`, dependsOn: [], ...svc },
+      { type: "service", path: `./${name}`, dependsOn: [], ...svc },
     ]),
   );
   return {

@@ -4,7 +4,13 @@ import { resolve } from "node:path";
 import { promisify } from "node:util";
 import type { WorkspaceConfig } from "@lo1/sdk";
 
-const execFileAsync = promisify(execFile);
+const defaultExec = promisify(execFile);
+
+export type ExecFn = (
+  cmd: string,
+  args: string[],
+  options?: { cwd?: string },
+) => Promise<{ stdout: string; stderr: string }>;
 
 export type CloneResult = {
   name: string;
@@ -32,6 +38,7 @@ async function pathExists(path: string): Promise<boolean> {
 export async function initRepositories(
   config: WorkspaceConfig,
   options?: { cwd?: string; failFast?: boolean },
+  exec: ExecFn = defaultExec,
 ): Promise<InitReposResult> {
   const cwd = options?.cwd ?? process.cwd();
   const failFast = options?.failFast ?? false;
@@ -47,10 +54,10 @@ export async function initRepositories(
     }
 
     try {
-      await execFileAsync("git", ["clone", repo.url, targetPath]);
+      await exec("git", ["clone", repo.url, targetPath]);
 
       if (repo.branch) {
-        await execFileAsync("git", ["checkout", repo.branch], {
+        await exec("git", ["checkout", repo.branch], {
           cwd: targetPath,
         });
       }
