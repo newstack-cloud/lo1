@@ -3,10 +3,16 @@ name: Release Please
 on:
   push:
     branches: [main]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      publish-only:
+        description: Skip release-please and run publish directly
+        type: boolean
+        default: false
 
 jobs:
   release-please:
+    if: ${{ !(inputs.publish-only || false) }}
     runs-on: ubuntu-latest
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created }}
@@ -20,7 +26,9 @@ jobs:
 
   publish:
     needs: release-please
-    if: needs.release-please.outputs.releases_created == 'true'
+    if: |
+      always() &&
+      (inputs.publish-only || needs.release-please.outputs.releases_created == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read

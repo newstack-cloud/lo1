@@ -12,6 +12,7 @@
     { "type": "chore", "section": "Miscellaneous", "hidden": true }
   ],
   "pull-request-title-pattern": "chore: release ${component} ${version}",
+  "group-pull-request-title-pattern": "chore: release ${component} ${version}",
   "plugins": [
     {
       "type": "linked-versions",
