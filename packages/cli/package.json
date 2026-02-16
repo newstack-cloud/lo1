@@ -2,6 +2,11 @@
   "name": "@lo1/cli",
   "version": "0.2.1",
   "description": "lo1 — Multi-service local dev environment",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/newstack-cloud/lo1",
+    "directory": "packages/cli"
+  },
   "type": "module",
   "bin": {
     "lo1": "./dist/lo1.js"

@@ -2,6 +2,11 @@
   "name": "@lo1/plugin-celerity",
   "version": "0.2.1",
   "description": "Celerity plugin for lo1 — blueprint-driven compose, provisioning, seeding, and runtime",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/newstack-cloud/lo1",
+    "directory": "plugins/celerity"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
