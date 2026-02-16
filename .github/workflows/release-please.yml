@@ -48,12 +48,8 @@ jobs:
 
       - name: Publish packages
         run: |
-          for pkg in packages/sdk packages/cli plugins/celerity; do
-            if [ -f "$pkg/package.json" ]; then
-              cd "$pkg"
-              bunx npm publish --access public --provenance
-              cd -
-            fi
-          done
+          bunx npm publish --access public --provenance -w packages/sdk
+          bunx npm publish --access public --provenance -w packages/cli
+          bunx npm publish --access public --provenance -w plugins/celerity
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
