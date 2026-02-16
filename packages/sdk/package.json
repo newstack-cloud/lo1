@@ -1,6 +1,6 @@
 {
   "name": "@lo1/sdk",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Plugin SDK for lo1 — types, config schemas, and utilities for plugin authors",
   "repository": {
     "type": "git",
