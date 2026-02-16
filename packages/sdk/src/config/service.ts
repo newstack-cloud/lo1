@@ -22,6 +22,7 @@ export const serviceConfigSchema = z.object({
   proxy: serviceProxySchema.optional(),
   hooks: serviceHooksSchema.optional(),
   dependsOn: z.array(z.string()).default([]),
+  initTask: z.boolean().default(false),
 });
 
 export type ServiceConfig = z.infer<typeof serviceConfigSchema>;

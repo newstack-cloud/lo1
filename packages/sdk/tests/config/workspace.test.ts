@@ -65,4 +65,48 @@ describe("workspaceSchema", () => {
     const result = workspaceSchema.safeParse(config);
     expect(result.success).toBe(true);
   });
+
+  test("parses extraCompose as object with initTaskServices", () => {
+    const config = {
+      version: "1",
+      name: "my-project",
+      services: {
+        api: { type: "service", path: "./services/api", port: 3000 },
+      },
+      extraCompose: {
+        file: "./infrastructure.compose.yaml",
+        initTaskServices: ["api_migrator", "localstack_init"],
+      },
+    };
+
+    const result = workspaceSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const extra = result.data.extraCompose as { file: string; initTaskServices?: string[] };
+      expect(extra.file).toBe("./infrastructure.compose.yaml");
+      expect(extra.initTaskServices).toEqual(["api_migrator", "localstack_init"]);
+    }
+  });
+
+  test("parses service with initTask flag", () => {
+    const config = {
+      version: "1",
+      name: "my-project",
+      services: {
+        migrator: {
+          type: "service",
+          path: "./services/migrator",
+          mode: "container",
+          containerImage: "migrator:latest",
+          initTask: true,
+        },
+      },
+    };
+
+    const result = workspaceSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.services.migrator.initTask).toBe(true);
+    }
+  });
 });

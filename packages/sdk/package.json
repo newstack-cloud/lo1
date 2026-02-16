@@ -15,7 +15,7 @@
   "files": ["dist", "schemas"],
   "scripts": {
     "build": "bun run build:ts && bun run build:schema",
-    "build:ts": "bun build ./src/index.ts --outdir ./dist --target bun && tsc --emitDeclarationOnly --outDir ./dist",
+    "build:ts": "bun build ./src/index.ts --outdir ./dist --target node && tsc --emitDeclarationOnly --outDir ./dist",
     "build:schema": "bun run ./src/schema/generate.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",

@@ -18,7 +18,15 @@ export const workspaceSchema = z.object({
   repositories: z.record(z.string(), repositorySchema).optional(),
   proxy: proxyConfigSchema.optional(),
   services: z.record(z.string(), serviceConfigSchema),
-  extraCompose: z.string().optional(),
+  extraCompose: z
+    .union([
+      z.string(),
+      z.object({
+        file: z.string(),
+        initTaskServices: z.array(z.string()).optional(),
+      }),
+    ])
+    .optional(),
   hooks: workspaceHooksSchema.optional(),
 });
 

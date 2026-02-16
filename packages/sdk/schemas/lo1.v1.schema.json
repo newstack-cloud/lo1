@@ -155,6 +155,10 @@
                   "type": "string"
                 },
                 "default": []
+              },
+              "initTask": {
+                "type": "boolean",
+                "default": false
               }
             },
             "required": [
@@ -165,7 +169,29 @@
           }
         },
         "extraCompose": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "initTaskServices": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "file"
+              ],
+              "additionalProperties": false
+            }
+          ]
         },
         "hooks": {
           "type": "object",
