@@ -8,8 +8,8 @@
  */
 
 const THRESHOLDS = {
-  lines: 75,
-  functions: 73,
+  lines: 77,
+  functions: 76,
 };
 
 const LCOV_PATH = "coverage/lcov.info";
