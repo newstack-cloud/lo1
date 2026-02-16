@@ -46,6 +46,12 @@ jobs:
 
       - run: bun run build
 
+      - name: Copy LICENSE into packages
+        run: |
+          for pkg in packages/sdk packages/cli plugins/celerity; do
+            cp LICENSE "$pkg/LICENSE"
+          done
+
       - name: Resolve workspace dependencies
         run: |
           SDK_VERSION=$(jq -r .version packages/sdk/package.json)

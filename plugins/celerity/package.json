@@ -2,6 +2,7 @@
   "name": "@lo1/plugin-celerity",
   "version": "0.2.3",
   "description": "Celerity plugin for lo1 — blueprint-driven compose, provisioning, seeding, and runtime",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/newstack-cloud/lo1",
@@ -11,7 +12,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "scripts": {
     "build": "bun build ./src/index.ts --outdir ./dist --target node && bun x tsc --emitDeclarationOnly --outDir ./dist",

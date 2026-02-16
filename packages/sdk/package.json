@@ -2,6 +2,7 @@
   "name": "@lo1/sdk",
   "version": "0.2.3",
   "description": "Plugin SDK for lo1 — types, config schemas, and utilities for plugin authors",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/newstack-cloud/lo1",
@@ -19,7 +20,8 @@
   },
   "files": [
     "dist",
-    "schemas"
+    "schemas",
+    "LICENSE"
   ],
   "scripts": {
     "build": "bun run build:ts && bun run build:schema",

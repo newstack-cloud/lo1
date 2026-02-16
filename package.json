@@ -1,6 +1,7 @@
 {
   "name": "lo1",
   "private": true,
+  "license": "Apache-2.0",
   "workspaces": [
     "packages/*",
     "plugins/*"
