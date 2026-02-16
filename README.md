@@ -4,6 +4,7 @@
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=newstack-cloud_lo1&metric=coverage)](https://sonarcloud.io/summary/new_code?id=newstack-cloud_lo1)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=newstack-cloud_lo1&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=newstack-cloud_lo1)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=newstack-cloud_lo1&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=newstack-cloud_lo1)
+[![NPM Version](https://img.shields.io/npm/v/%40lo1%2Fcli)](https://www.npmjs.com/package/@lo1/cli)
 
 Multi-service local development environment. Orchestrate services, infrastructure, and reverse proxying with a single `lo1 up`.
 
@@ -11,19 +12,19 @@ Multi-service local development environment. Orchestrate services, infrastructur
 
 ## Packages
 
-| Package | Description |
-|---|---|
-| [`@lo1/cli`](./packages/cli) | CLI application — `lo1 init`, `lo1 up`, `lo1 down`, `lo1 status` |
-| [`@lo1/sdk`](./packages/sdk) | Plugin SDK — types, config schemas, and utilities for plugin authors |
+| Package                                      | Description                                                           |
+| -------------------------------------------- | --------------------------------------------------------------------- |
+| [`@lo1/cli`](./packages/cli)                 | CLI application — `lo1 init`, `lo1 up`, `lo1 down`, `lo1 status`      |
+| [`@lo1/sdk`](./packages/sdk)                 | Plugin SDK — types, config schemas, and utilities for plugin authors  |
 | [`@lo1/plugin-celerity`](./plugins/celerity) | Celerity plugin — blueprint-driven compose, provisioning, and seeding |
 
 ## Prerequisites
 
-| Dependency | Version | Purpose |
-|---|---|---|
-| [Node.js](https://nodejs.org/) | 22+ | CLI runtime |
-| [Docker](https://docs.docker.com/get-docker/) | 20.10+ | Container services, infrastructure, reverse proxy |
-| [Git](https://git-scm.com/) | 2.x | Repository cloning (`lo1 init`) |
+| Dependency                                    | Version | Purpose                                           |
+| --------------------------------------------- | ------- | ------------------------------------------------- |
+| [Node.js](https://nodejs.org/)                | 22+     | CLI runtime                                       |
+| [Docker](https://docs.docker.com/get-docker/) | 20.10+  | Container services, infrastructure, reverse proxy |
+| [Git](https://git-scm.com/)                   | 2.x     | Repository cloning (`lo1 init`)                   |
 
 Docker Compose v2 is included with Docker Desktop (macOS/Windows) and modern Docker Engine (Linux).
 
