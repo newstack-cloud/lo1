@@ -20,19 +20,19 @@ function tailFile(filePath: string, prefix: string, signal: AbortSignal): void {
   // Use absolute paths to avoid searching PATH (security-sensitive)
   const child = isWindows
     ? spawn(
-      join(
-        process.env.SYSTEMROOT ?? "C:\\Windows",
-        "System32",
-        "WindowsPowerShell",
-        "v1.0",
-        "powershell.exe",
-      ),
-      ["-Command", `Get-Content -Path '${filePath}' -Wait -Tail 50`],
-      { stdio: ["ignore", "pipe", "ignore"] },
-    )
+        join(
+          process.env.SYSTEMROOT ?? "C:\\Windows",
+          "System32",
+          "WindowsPowerShell",
+          "v1.0",
+          "powershell.exe",
+        ),
+        ["-Command", `Get-Content -Path '${filePath}' -Wait -Tail 50`],
+        { stdio: ["ignore", "pipe", "ignore"] },
+      )
     : spawn("/usr/bin/tail", ["-n", "50", "-f", filePath], {
-      stdio: ["ignore", "pipe", "ignore"],
-    });
+        stdio: ["ignore", "pipe", "ignore"],
+      });
 
   let buf = "";
   child.stdout?.on("data", (chunk: Buffer) => {
