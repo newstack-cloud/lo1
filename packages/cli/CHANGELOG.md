@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/newstack-cloud/lo1/compare/cli/v0.2.3...cli/v0.2.4) (2026-02-16)
+
+
+### Bug Fixes
+
+* **cli:** add missing licenses and use dynamic version from package manifest ([6468252](https://github.com/newstack-cloud/lo1/commit/6468252db451f5a70ea98741f1583627ea13c23d))
+
 ## [0.2.3](https://github.com/newstack-cloud/lo1/compare/cli/v0.2.2...cli/v0.2.3) (2026-02-16)
 
 
