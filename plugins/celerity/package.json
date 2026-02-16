@@ -1,6 +1,6 @@
 {
   "name": "@lo1/plugin-celerity",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Celerity plugin for lo1 — blueprint-driven compose, provisioning, seeding, and runtime",
   "repository": {
     "type": "git",

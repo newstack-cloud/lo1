@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/newstack-cloud/lo1/compare/sdk/v0.2.2...sdk/v0.2.3) (2026-02-16)
+
+
+### Miscellaneous
+
+* **sdk:** Synchronize lo1 versions
+
 ## [0.2.2](https://github.com/newstack-cloud/lo1/compare/sdk/v0.2.1...sdk/v0.2.2) (2026-02-16)
 
 
