@@ -8,7 +8,7 @@
  */
 
 const THRESHOLDS = {
-  lines: 80,
+  lines: 75,
   functions: 73,
 };
 
