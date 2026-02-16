@@ -1,6 +1,6 @@
 {
   "name": "@lo1/cli",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "lo1 — Multi-service local dev environment",
   "repository": {
     "type": "git",
