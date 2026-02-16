@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/newstack-cloud/lo1/compare/cli/v0.2.1...cli/v0.2.2) (2026-02-16)
+
+
+### Bug Fixes
+
+* **cli:** add missing repository information for provenance ([4e19625](https://github.com/newstack-cloud/lo1/commit/4e1962536d584d82e09c49f26f00b3fbb8d124c0))
+
 ## [0.2.1](https://github.com/newstack-cloud/lo1/compare/cli/v0.2.0...cli/v0.2.1) (2026-02-16)
 
 
