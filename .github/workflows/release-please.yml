@@ -42,6 +42,10 @@ jobs:
 
       - run: bun run build
 
+      - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish packages
         run: |
           for pkg in packages/sdk packages/cli plugins/celerity; do
@@ -53,4 +57,3 @@ jobs:
           done
         env:
           NPM_CONFIG_PROVENANCE: true
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
