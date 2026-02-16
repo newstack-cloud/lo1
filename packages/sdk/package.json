@@ -1,6 +1,6 @@
 {
   "name": "@lo1/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Plugin SDK for lo1 — types, config schemas, and utilities for plugin authors",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,7 +12,10 @@
     },
     "./schemas/lo1.v1.schema.json": "./schemas/lo1.v1.schema.json"
   },
-  "files": ["dist", "schemas"],
+  "files": [
+    "dist",
+    "schemas"
+  ],
   "scripts": {
     "build": "bun run build:ts && bun run build:schema",
     "build:ts": "bun build ./src/index.ts --outdir ./dist --target node && tsc --emitDeclarationOnly --outDir ./dist",
