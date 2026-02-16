@@ -1,5 +1,5 @@
 {
-  "packages/cli": "0.2.0",
-  "packages/sdk": "0.2.0",
-  "plugins/celerity": "0.2.0"
+  "packages/cli": "0.2.1",
+  "packages/sdk": "0.2.1",
+  "plugins/celerity": "0.2.1"
 }
