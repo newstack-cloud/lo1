@@ -7,6 +7,7 @@ import { startProcess as defaultStartProcess } from "../runner/process";
 import { startContainer as defaultStartContainer } from "../runner/container";
 import { executeHook as defaultExecuteHook } from "../hooks/executor";
 import { buildServiceEnv as defaultBuildServiceEnv } from "../discovery/registry";
+import { projectId, networkId } from "../compose/generate";
 
 export class ServiceStartError extends Error {
   constructor(message: string) {
@@ -86,13 +87,16 @@ export async function startService(
     handle = await startWithContainer(options, env, deps);
   } else if (serviceConfig.mode === "dev" && isBuiltin) {
     handle = startWithProcess(options, env, deps);
-  } else if (serviceConfig.mode === "container" && serviceConfig.containerImage) {
+  } else if (
+    serviceConfig.mode === "container" &&
+    (serviceConfig.containerImage || serviceConfig.compose)
+  ) {
     handle = createComposeHandle(serviceName);
   } else {
     throw new ServiceStartError(
       `Service "${serviceName}" (type: ${serviceConfig.type}, mode: ${serviceConfig.mode}) ` +
         `has no valid runner: needs a plugin with configureContainer(), a command for dev mode, ` +
-        `or a containerImage for container mode`,
+        `or a containerImage/compose file for container mode`,
     );
   }
 
@@ -150,7 +154,7 @@ async function startWithContainer(
     servicePath: resolve(options.workspaceDir, serviceConfig.path),
     servicePort: String(serviceConfig.port ?? ""),
     mode: serviceConfig.mode === "skip" ? "dev" : serviceConfig.mode,
-    networkName: `lo1-${config.name}_lo1`,
+    networkName: `${projectId(config.name)}_${networkId(config.name)}`,
     endpoints,
   };
 
@@ -159,7 +163,7 @@ async function startWithContainer(
     workspaceName: config.name,
     serviceName,
     containerConfig,
-    networkName: `lo1-${config.name}_lo1`,
+    networkName: `${projectId(config.name)}_${networkId(config.name)}`,
     env,
     onOutput: options.onOutput,
   });

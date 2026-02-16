@@ -25,7 +25,6 @@ function makeDeps(overrides: Partial<StopDeps> = {}): StopDeps {
       }),
     ),
     composeDown: mock(() => Promise.resolve()),
-    removeHosts: mock(() => Promise.resolve()),
     executeHook: mock((_name, _cmd, _opts) =>
       Promise.resolve({ exitCode: 0, hookName: _name }),
     ),
@@ -129,14 +128,6 @@ describe("stopWorkspace", () => {
     const callArgs = (deps.composeDown as ReturnType<typeof mock>).mock.calls[0][0];
     expect(callArgs.projectName).toBe("lo1-my-platform");
     expect(callArgs.fileArgs).toEqual([".lo1/docker-compose.yml"]);
-  });
-
-  it("should remove hosts entries", async () => {
-    const deps = makeDeps();
-
-    await stopWorkspace({ workspaceDir: "/workspace" }, deps);
-
-    expect(deps.removeHosts).toHaveBeenCalledTimes(1);
   });
 
   it("should remove state file after shutdown", async () => {

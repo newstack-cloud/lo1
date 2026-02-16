@@ -78,13 +78,20 @@ function writePrivileged(filePath: string, content: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const isWindows = platform() === "win32";
 
+    // Use absolute paths to avoid using an untrusted search path
     const proc = isWindows
       ? spawn(
-          "powershell",
+          join(
+            process.env.SYSTEMROOT ?? "C:\\Windows",
+            "System32",
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe",
+          ),
           ["-Command", `Set-Content -Path '${filePath}' -Value $input -Encoding ASCII`],
           { stdio: ["pipe", "ignore", "pipe"] },
         )
-      : spawn("sudo", ["tee", filePath], {
+      : spawn("/usr/bin/sudo", ["tee", filePath], {
           stdio: ["pipe", "ignore", "pipe"],
         });
 

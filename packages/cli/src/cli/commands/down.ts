@@ -1,25 +1,13 @@
 import { Command } from "commander";
 import { stopWorkspace } from "../../orchestrator/stop";
+import { createEventFormatter } from "../../output/format";
 import type { OrchestratorEvent } from "../../orchestrator/types";
-
-function formatEvent(event: OrchestratorEvent): string | null {
-  switch (event.kind) {
-    case "phase":
-      return `[lo1] ${event.phase}`;
-    case "service":
-      return `[lo1] ${event.service}: ${event.status}`;
-    case "hook":
-      return `[hook] ${event.output.text}`;
-    case "error":
-      return `[error] ${event.message}`;
-    case "output":
-      return null;
-  }
-}
 
 export const downCommand = new Command("down")
   .description("Stop all services and infrastructure")
-  .action(async () => {
+  .option("--clean", "Remove volumes and orphan containers")
+  .action(async (options) => {
+    const formatEvent = createEventFormatter();
     const onEvent = (event: OrchestratorEvent) => {
       const msg = formatEvent(event);
       if (msg) process.stdout.write(msg.trimEnd() + "\n");
@@ -28,6 +16,7 @@ export const downCommand = new Command("down")
     try {
       await stopWorkspace({
         workspaceDir: process.cwd(),
+        clean: options.clean === true,
         onEvent,
       });
     } catch (err) {

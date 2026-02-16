@@ -2,7 +2,6 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { loadWorkspaceConfig } from "../config/loader";
 import { composeDown } from "../runner/compose";
-import { removeHosts } from "../hosts/index";
 import { executeHook } from "../hooks/executor";
 import { readState as defaultReadState, removeState as defaultRemoveState } from "./state";
 import type { ServiceHandle } from "./service";
@@ -12,7 +11,7 @@ const defaultExec = promisify(execFile);
 
 export type StopDeps = Pick<
   OrchestratorDeps,
-  "loadConfig" | "composeDown" | "removeHosts" | "executeHook" | "readState" | "removeState"
+  "loadConfig" | "composeDown" | "executeHook" | "readState" | "removeState"
 > & {
   exec?: (cmd: string, args: string[]) => Promise<{ stdout: string; stderr: string }>;
 };
@@ -21,7 +20,6 @@ function createDefaultStopDeps(): StopDeps {
   return {
     loadConfig: loadWorkspaceConfig,
     composeDown,
-    removeHosts,
     executeHook,
     readState: defaultReadState,
     removeState: defaultRemoveState,
@@ -143,19 +141,16 @@ export async function stopWorkspace(
     }
   }
 
-  emit({ kind: "phase", phase: "Stopping infrastructure" });
+  const phase = options.clean
+    ? "Removing infrastructure (volumes + orphans)"
+    : "Stopping infrastructure";
+  emit({ kind: "phase", phase });
   await deps.composeDown({
     projectName: state.projectName,
     fileArgs: state.fileArgs,
     cwd: state.workspaceDir,
+    clean: options.clean,
   });
-
-  emit({ kind: "phase", phase: "Removing hosts entries" });
-  try {
-    await deps.removeHosts();
-  } catch {
-    // Best-effort — hosts removal may require sudo
-  }
 
   await deps.removeState(workspaceDir);
   emit({ kind: "phase", phase: "Stopped" });

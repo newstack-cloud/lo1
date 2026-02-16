@@ -15,6 +15,8 @@ export type TlsDeps = {
   mkdir: (path: string) => Promise<void>;
   hash: (content: string) => string;
   platform: string;
+  maxCertRetries: number;
+  certRetryIntervalMs: number;
 };
 
 export class TlsError extends Error {
@@ -50,6 +52,8 @@ function createDefaultDeps(): TlsDeps {
     },
     hash: sha256,
     platform: process.platform,
+    maxCertRetries: 30,
+    certRetryIntervalMs: 2000,
   };
 }
 
@@ -81,15 +85,19 @@ export async function trustCaddyCa(
 }
 
 async function extractCaCert(containerName: string, deps: TlsDeps): Promise<string> {
-  try {
-    const { stdout } = await deps.exec("docker", ["exec", containerName, "cat", CA_CERT_PATH]);
-    return stdout;
-  } catch (err) {
-    throw new TlsError(
-      `Failed to extract Caddy CA certificate. Is the proxy container running?\n` +
-        `Detail: ${err instanceof Error ? err.message : String(err)}`,
-    );
+  for (let attempt = 1; attempt <= deps.maxCertRetries; attempt++) {
+    try {
+      const { stdout } = await deps.exec("docker", ["exec", containerName, "cat", CA_CERT_PATH]);
+      return stdout;
+    } catch {
+      if (attempt === deps.maxCertRetries) break;
+      await new Promise((r) => setTimeout(r, deps.certRetryIntervalMs));
+    }
   }
+  throw new TlsError(
+    `Failed to extract Caddy CA certificate after ${deps.maxCertRetries} attempts. ` +
+      `Is the proxy container "${containerName}" running?`,
+  );
 }
 
 async function installOnHost(certPath: string, deps: TlsDeps): Promise<void> {

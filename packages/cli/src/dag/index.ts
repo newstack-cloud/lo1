@@ -58,7 +58,9 @@ export function buildDag(config: WorkspaceConfig): DagResult {
   let remaining = serviceNames.length;
 
   // First layer: services with no dependencies
-  let currentLayer = serviceNames.filter((name) => inDegree.get(name) === 0).sort();
+  let currentLayer = serviceNames
+    .filter((name) => inDegree.get(name) === 0)
+    .sort((a, b) => a.localeCompare(b));
 
   while (currentLayer.length > 0) {
     layers.push(currentLayer);
@@ -74,7 +76,7 @@ export function buildDag(config: WorkspaceConfig): DagResult {
         }
       }
     }
-    currentLayer = nextLayer.sort();
+    currentLayer = nextLayer.sort((a, b) => a.localeCompare(b));
   }
 
   if (remaining > 0) {

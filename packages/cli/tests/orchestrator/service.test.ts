@@ -7,6 +7,7 @@ import {
 } from "../../src/orchestrator/service";
 import type { WorkspaceConfig, Plugin, ServiceConfig } from "@lo1/sdk";
 import type { EndpointRegistry } from "../../src/discovery/registry";
+import { projectId, networkId } from "../../src/compose/generate";
 
 function makeConfig(services: Record<string, Partial<ServiceConfig>> = {}): WorkspaceConfig {
   const svcEntries: Record<string, ServiceConfig> = {};
@@ -151,7 +152,7 @@ describe("startService", () => {
 
     const input = (configureFn as ReturnType<typeof mock>).mock.calls[0][0];
     expect(input.serviceName).toBe("api");
-    expect(input.networkName).toBe("lo1-my-platform_lo1");
+    expect(input.networkName).toBe(`${projectId("my-platform")}_${networkId("my-platform")}`);
     expect(input.mode).toBe("dev");
   });
 

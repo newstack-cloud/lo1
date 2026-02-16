@@ -13,6 +13,8 @@ function makeDeps(overrides: Partial<TlsDeps> = {}): TlsDeps {
     mkdir: mock(() => Promise.resolve()),
     hash: mock(() => FAKE_HASH),
     platform: "darwin",
+    maxCertRetries: 1,
+    certRetryIntervalMs: 0,
     ...overrides,
   };
 }

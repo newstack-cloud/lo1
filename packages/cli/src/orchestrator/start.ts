@@ -1,12 +1,21 @@
+import { join } from "node:path";
 import type { Plugin, PluginContext, WorkspaceConfig, ComposeContribution } from "@lo1/sdk";
+import { createLineBuffer } from "../output/line-buffer";
 import type { EndpointRegistry } from "../discovery/registry";
 import { loadWorkspaceConfig } from "../config/loader";
 import { buildDag } from "../dag/index";
 import { buildEndpointRegistry } from "../discovery/registry";
-import { generateCompose, writeComposeFile } from "../compose/generate";
+import {
+  generateCompose,
+  writeComposeFile,
+  preprocessServiceComposeFiles,
+  discoverExtraComposeServices,
+  extraComposeFile,
+  extraComposeInitTasks,
+} from "../compose/generate";
 import { generateCaddyfile, writeCaddyfile } from "../proxy/caddyfile";
 import { generateHostsBlock, applyHosts } from "../hosts/index";
-import { composeUp } from "../runner/compose";
+import { composeUp, composeWait, composeLogs, type ComposeLogLine } from "../runner/compose";
 import { loadPlugins } from "../plugin/loader";
 import { executeHook } from "../hooks/executor";
 import { trustCaddyCa as defaultTrustCaddyCa } from "../tls/setup";
@@ -72,6 +81,9 @@ function createDefaultDeps(): OrchestratorDeps {
     applyHosts,
     removeHosts: () => import("../hosts/index").then((m) => m.removeHosts()),
     composeUp,
+    composeWait,
+    composeLogs,
+    discoverExtraComposeServices,
     composeDown: (opts) => import("../runner/compose").then((m) => m.composeDown(opts)),
     composePs: (opts) => import("../runner/compose").then((m) => m.composePs(opts)),
     startService: defaultStartService,
@@ -83,6 +95,15 @@ function createDefaultDeps(): OrchestratorDeps {
   };
 }
 
+type PrepareResult = {
+  config: WorkspaceConfig;
+  dag: { layers: string[][] };
+  registry: EndpointRegistry;
+  plugins: Map<string, Plugin>;
+  composeResult: ReturnType<OrchestratorDeps["generateCompose"]>;
+  initTaskServices: string[];
+};
+
 export async function startWorkspace(
   options: StartOptions,
   overrides: Partial<OrchestratorDeps> = {},
@@ -91,67 +112,14 @@ export async function startWorkspace(
   const emit = options.onEvent ?? (() => {});
   const workspaceDir = options.workspaceDir ?? ".";
 
-  const existingState = await deps.readState(workspaceDir);
-  if (existingState) {
-    emit({ kind: "phase", phase: "Cleaning up previous workspace run" });
-    const staleHandles = hydrateHandles(existingState);
-    for (const handle of staleHandles) {
-      await handle.stop();
-    }
-    await deps.composeDown({
-      projectName: existingState.projectName,
-      fileArgs: existingState.fileArgs,
-      cwd: existingState.workspaceDir,
-    });
-    await deps.removeState(workspaceDir);
-  }
+  await cleanupStaleWorkspace(deps, workspaceDir, emit);
 
-  emit({ kind: "phase", phase: "Loading config" });
-  let config = await deps.loadConfig(options.configPath);
-  config = applyModeOverride(config, options.modeOverride);
-  config = applyFilter(config, options.serviceFilter);
-
-  emit({ kind: "phase", phase: "Building dependency graph" });
-  const dag = deps.buildDag(config);
-  const registry = deps.buildEndpointRegistry(config);
-
-  emit({ kind: "phase", phase: "Loading plugins" });
-  const context: PluginContext = {
-    workspaceDir,
-    workspaceName: config.name,
-    logger: createLogger(emit),
-  };
-  const plugins = await deps.loadPlugins(config.plugins ?? {}, context);
-  validatePluginTypes(config, plugins);
-
-  emit({ kind: "phase", phase: "Collecting compose contributions" });
-  const contributions = await collectContributions(config, plugins);
-
-  emit({ kind: "phase", phase: "Generating compose and proxy config" });
-  const composeResult = deps.generateCompose(config, contributions);
-  await deps.writeComposeFile(composeResult.yaml, workspaceDir);
-
-  const caddyResult = deps.generateCaddyfile(config);
-  await deps.writeCaddyfile(caddyResult.content, workspaceDir);
-
-  const hostsBlock = deps.generateHostsBlock(caddyResult.domains);
-  if (hostsBlock) await deps.applyHosts(hostsBlock);
+  const prepared = await prepareWorkspaceConfig(deps, options, workspaceDir, emit);
+  const { config, dag, registry, plugins, composeResult, initTaskServices } = prepared;
 
   checkAborted(options.signal);
 
-  emit({ kind: "phase", phase: "Starting infrastructure" });
-  const composeOptions = {
-    projectName: composeResult.projectName,
-    fileArgs: composeResult.fileArgs,
-    cwd: workspaceDir,
-  };
-  await deps.composeUp(composeOptions);
-
-  if (config.proxy?.tls?.enabled) {
-    emit({ kind: "phase", phase: "Trusting Caddy CA" });
-    await deps.trustCaddyCa(`${composeResult.projectName}-proxy`, workspaceDir);
-  }
-
+  // Write state early so teardown can find the compose project on failure.
   const baseState = {
     workspaceName: config.name,
     projectName: composeResult.projectName,
@@ -160,6 +128,20 @@ export async function startWorkspace(
     services: {} as Record<string, ServiceState>,
   };
   await deps.writeState(baseState, workspaceDir);
+
+  const logsHandle = await startComposePhases(
+    deps,
+    composeResult,
+    initTaskServices,
+    workspaceDir,
+    options,
+    emit,
+  );
+
+  if (config.proxy?.tls?.enabled) {
+    emit({ kind: "phase", phase: "Trusting Caddy CA" });
+    await deps.trustCaddyCa(`${composeResult.projectName}-proxy`, workspaceDir);
+  }
 
   checkAborted(options.signal);
 
@@ -194,11 +176,162 @@ export async function startWorkspace(
   });
 
   await deps.writeState({ ...baseState, services: buildServiceState(handles) }, workspaceDir);
-
   await runWorkspaceHook({ hookName: "postSetup", ...hookCtx });
 
   emit({ kind: "phase", phase: "Ready" });
-  return { handles, composeOptions, config };
+  const composeOptions = {
+    projectName: composeResult.projectName,
+    fileArgs: composeResult.fileArgs,
+    cwd: workspaceDir,
+  };
+  const noopHandle = { kill: () => {} };
+  return { handles, composeOptions, config, logsHandle: logsHandle ?? noopHandle };
+}
+
+async function cleanupStaleWorkspace(
+  deps: OrchestratorDeps,
+  workspaceDir: string,
+  emit: (event: OrchestratorEvent) => void,
+): Promise<void> {
+  const existingState = await deps.readState(workspaceDir);
+  if (!existingState) return;
+
+  emit({ kind: "phase", phase: "Cleaning up previous workspace run" });
+  const staleHandles = hydrateHandles(existingState);
+  for (const handle of staleHandles) {
+    await handle.stop();
+  }
+  await deps.composeDown({
+    projectName: existingState.projectName,
+    fileArgs: existingState.fileArgs,
+    cwd: existingState.workspaceDir,
+  });
+  await deps.removeState(workspaceDir);
+}
+
+async function prepareWorkspaceConfig(
+  deps: OrchestratorDeps,
+  options: StartOptions,
+  workspaceDir: string,
+  emit: (event: OrchestratorEvent) => void,
+): Promise<PrepareResult> {
+  emit({ kind: "phase", phase: "Loading config" });
+  let config = await deps.loadConfig(options.configPath);
+  config = applyModeOverride(config, options.modeOverride);
+  config = applyFilter(config, options.serviceFilter);
+
+  emit({ kind: "phase", phase: "Building dependency graph" });
+  const dag = deps.buildDag(config);
+  const registry = deps.buildEndpointRegistry(config);
+
+  emit({ kind: "phase", phase: "Loading plugins" });
+  const context: PluginContext = {
+    workspaceDir,
+    workspaceName: config.name,
+    logger: createLogger(emit),
+  };
+  const plugins = await deps.loadPlugins(config.plugins ?? {}, context);
+  validatePluginTypes(config, plugins);
+
+  emit({ kind: "phase", phase: "Collecting compose contributions" });
+  const contributions = await collectContributions(config, plugins);
+
+  emit({ kind: "phase", phase: "Generating compose and proxy config" });
+  const composeResult = deps.generateCompose(config, contributions);
+  await deps.writeComposeFile(composeResult.yaml, workspaceDir);
+  await preprocessServiceComposeFiles(config, workspaceDir);
+
+  const ecFile = extraComposeFile(config);
+  const initTaskServices = [
+    ...extraComposeInitTasks(config),
+    ...Object.entries(config.services)
+      .filter(([, svc]) => svc.initTask)
+      .map(([name]) => name),
+  ];
+  if (ecFile) {
+    const extraServices = await deps.discoverExtraComposeServices(ecFile, workspaceDir);
+    composeResult.infraServices.push(...extraServices);
+  }
+
+  const caddyResult = deps.generateCaddyfile(config);
+  await deps.writeCaddyfile(caddyResult.content, workspaceDir);
+
+  const hostsBlock = deps.generateHostsBlock(caddyResult.domains);
+  if (hostsBlock) await deps.applyHosts(hostsBlock);
+
+  return { config, dag, registry, plugins, composeResult, initTaskServices };
+}
+
+async function startComposePhases(
+  deps: OrchestratorDeps,
+  composeResult: PrepareResult["composeResult"],
+  initTaskServices: string[],
+  workspaceDir: string,
+  options: StartOptions,
+  emit: (event: OrchestratorEvent) => void,
+): Promise<{ kill: () => void } | undefined> {
+  const emitInfraLine = (stream: "stdout" | "stderr") => (text: string) =>
+    emit({
+      kind: "output",
+      line: { service: "infrastructure", stream, text, timestamp: new Date() },
+    });
+
+  const stdoutBuffer = createLineBuffer(emitInfraLine("stdout"));
+  const stderrBuffer = createLineBuffer(emitInfraLine("stderr"));
+
+  const composeOptions = {
+    projectName: composeResult.projectName,
+    fileArgs: composeResult.fileArgs,
+    cwd: workspaceDir,
+    signal: options.signal,
+    onOutput: (chunk: { stream: "stdout" | "stderr"; text: string }) => {
+      (chunk.stream === "stdout" ? stdoutBuffer : stderrBuffer)(chunk.text);
+    },
+  };
+
+  const emitLogLine = (line: ComposeLogLine) =>
+    emit({
+      kind: "output",
+      line: { service: line.service, stream: line.stream, text: line.text, timestamp: new Date() },
+    });
+
+  let logsHandle: { kill: () => void } | undefined;
+
+  try {
+    if (composeResult.infraServices.length > 0) {
+      emit({ kind: "phase", phase: "Starting infrastructure" });
+      await deps.composeUp({ ...composeOptions, services: composeResult.infraServices });
+      logsHandle = deps.composeLogs(composeOptions, emitLogLine);
+      await deps.composeWait({
+        projectName: composeResult.projectName,
+        fileArgs: composeResult.fileArgs,
+        services: composeResult.infraServices,
+        cwd: workspaceDir,
+        signal: options.signal,
+        waitForExit: initTaskServices,
+      });
+    }
+
+    if (composeResult.appServices.length > 0) {
+      emit({ kind: "phase", phase: "Starting compose services" });
+      await deps.composeUp({ ...composeOptions, services: composeResult.appServices });
+      if (!logsHandle) logsHandle = deps.composeLogs(composeOptions, emitLogLine);
+      const appInitTasks = initTaskServices.filter((s) => composeResult.appServices.includes(s));
+      await deps.composeWait({
+        projectName: composeResult.projectName,
+        fileArgs: composeResult.fileArgs,
+        services: composeResult.appServices,
+        cwd: workspaceDir,
+        signal: options.signal,
+        waitForExit: appInitTasks,
+      });
+    }
+  } catch (err) {
+    logsHandle?.kill();
+    throw err;
+  }
+
+  return logsHandle;
 }
 
 function applyModeOverride(config: WorkspaceConfig, mode?: "dev" | "container"): WorkspaceConfig {
@@ -307,7 +440,7 @@ async function runPluginProvisioning(
     promises.push(
       plugin.provisionInfra({
         serviceName: name,
-        servicePath: `${workspaceDir}/${service.path}`,
+        servicePath: join(workspaceDir, service.path),
         endpoints,
       }),
     );
@@ -332,7 +465,7 @@ async function runPluginSeeding(
     promises.push(
       plugin.seedData({
         serviceName: name,
-        servicePath: `${workspaceDir}/${service.path}`,
+        servicePath: join(workspaceDir, service.path),
         mode: "run",
         endpoints,
       }),

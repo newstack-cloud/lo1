@@ -20,7 +20,7 @@
       "name": "@lo1/cli",
       "version": "0.1.0",
       "bin": {
-        "lo1": "./dist/lo1.js",
+        "lo1": "./dist/lo1",
       },
       "dependencies": {
         "@lo1/sdk": "workspace:*",

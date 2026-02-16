@@ -5,7 +5,13 @@ import type { ComposeResult } from "../compose/generate";
 import type { CaddyfileResult } from "../proxy/caddyfile";
 import type { OutputLine } from "../runner/process";
 import type { HookOutput, HookResult } from "../hooks/executor";
-import type { ComposeExecOptions, ComposeServiceStatus } from "../runner/compose";
+import type {
+  ComposeExecOptions,
+  ComposeWaitOptions,
+  ComposeServiceStatus,
+  ComposeLogLine,
+  ComposeLogsHandle,
+} from "../runner/compose";
 import type { ServiceHandle, StartServiceOptions } from "./service";
 
 export type OrchestratorEvent =
@@ -34,7 +40,13 @@ export type OrchestratorDeps = {
   applyHosts: (block: string) => Promise<void>;
   removeHosts: () => Promise<void>;
   composeUp: (options: ComposeExecOptions) => Promise<void>;
-  composeDown: (options: ComposeExecOptions) => Promise<void>;
+  composeWait: (options: ComposeWaitOptions) => Promise<void>;
+  composeLogs: (
+    options: ComposeExecOptions,
+    onLog: (line: ComposeLogLine) => void,
+  ) => ComposeLogsHandle;
+  discoverExtraComposeServices: (path: string, workspaceDir?: string) => Promise<string[]>;
+  composeDown: (options: ComposeExecOptions & { clean?: boolean }) => Promise<void>;
   composePs: (options: ComposeExecOptions) => Promise<ComposeServiceStatus[]>;
   startService: (options: StartServiceOptions) => Promise<ServiceHandle>;
   executeHook: (
@@ -66,6 +78,9 @@ export type StartResult = {
   handles: ServiceHandle[];
   composeOptions: ComposeExecOptions;
   config: WorkspaceConfig;
+  /** Handle for the long-running `docker compose logs -f` process.
+   *  Caller should kill it during shutdown. */
+  logsHandle: { kill: () => void };
 };
 
 export type StopOptions = {
@@ -73,6 +88,8 @@ export type StopOptions = {
   /** In-memory handles from a running workspace. When provided, stop uses these
    *  directly instead of hydrating from the on-disk state file. */
   handles?: ServiceHandle[];
+  /** Remove volumes and orphan containers (docker compose down -v --remove-orphans). */
+  clean?: boolean;
   signal?: AbortSignal;
   onEvent?: (event: OrchestratorEvent) => void;
 };

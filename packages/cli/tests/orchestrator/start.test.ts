@@ -15,6 +15,7 @@ function makeConfig(overrides: Partial<WorkspaceConfig> = {}): WorkspaceConfig {
         mode: "dev",
         command: "npm start",
         dependsOn: [],
+        initTask: false,
       },
       web: {
         type: "app",
@@ -23,6 +24,7 @@ function makeConfig(overrides: Partial<WorkspaceConfig> = {}): WorkspaceConfig {
         mode: "dev",
         command: "vite",
         dependsOn: ["api"],
+        initTask: false,
       },
     },
     ...overrides,
@@ -64,6 +66,8 @@ function makeDeps(overrides: Partial<OrchestratorDeps> = {}): OrchestratorDeps {
       projectName: "lo1-my-platform",
       fileArgs: [".lo1/docker-compose.yml"],
       pluginEnvVars: {},
+      infraServices: ["lo1-my-platform-proxy"],
+      appServices: [],
     })),
     writeComposeFile: mock(() => Promise.resolve(".lo1/docker-compose.yml")),
     generateCaddyfile: mock(() => ({
@@ -75,6 +79,9 @@ function makeDeps(overrides: Partial<OrchestratorDeps> = {}): OrchestratorDeps {
     applyHosts: mock(() => Promise.resolve()),
     removeHosts: mock(() => Promise.resolve()),
     composeUp: mock(() => Promise.resolve()),
+    composeWait: mock(() => Promise.resolve()),
+    composeLogs: mock(() => ({ kill: mock(() => {}) })),
+    discoverExtraComposeServices: mock(() => Promise.resolve([])),
     composeDown: mock(() => Promise.resolve()),
     composePs: mock(() => Promise.resolve([])),
     startService: mock((opts) =>
@@ -133,6 +140,7 @@ describe("startWorkspace", () => {
           path: "./api",
           mode: "dev",
           dependsOn: [],
+          initTask: false,
         },
       },
     });
@@ -147,7 +155,7 @@ describe("startWorkspace", () => {
   it("should call contributeCompose on each plugin", async () => {
     const config = makeConfig({
       services: {
-        api: { type: "celerity", path: "./api", mode: "dev", dependsOn: [], command: "run" },
+        api: { type: "celerity", path: "./api", mode: "dev", dependsOn: [], command: "run", initTask: false },
       },
       plugins: { celerity: "@lo1/plugin-celerity" },
     });
@@ -198,14 +206,139 @@ describe("startWorkspace", () => {
     expect(deps.applyHosts).toHaveBeenCalledTimes(1);
   });
 
-  it("should call composeUp with correct options", async () => {
+  it("should call composeUp and composeWait with infra services", async () => {
     const deps = makeDeps();
 
     await startWorkspace({}, deps);
 
-    const callArgs = (deps.composeUp as ReturnType<typeof mock>).mock.calls[0][0];
-    expect(callArgs.projectName).toBe("lo1-my-platform");
-    expect(callArgs.fileArgs).toEqual([".lo1/docker-compose.yml"]);
+    const upCalls = (deps.composeUp as ReturnType<typeof mock>).mock.calls;
+    expect(upCalls).toHaveLength(1);
+    expect(upCalls[0][0].services).toEqual(["lo1-my-platform-proxy"]);
+
+    const waitCalls = (deps.composeWait as ReturnType<typeof mock>).mock.calls;
+    expect(waitCalls).toHaveLength(1);
+    expect(waitCalls[0][0].services).toEqual(["lo1-my-platform-proxy"]);
+    expect(waitCalls[0][0].waitForExit).toEqual([]);
+  });
+
+  it("should call composeUp and composeWait twice when both infra and app services exist", async () => {
+    const deps = makeDeps({
+      generateCompose: mock(() => ({
+        yaml: "version: '3'",
+        projectName: "lo1-my-platform",
+        fileArgs: [".lo1/docker-compose.yml"],
+        pluginEnvVars: {},
+        infraServices: ["postgres", "lo1-my-platform-proxy"],
+        appServices: ["api"],
+      })),
+    });
+
+    await startWorkspace({}, deps);
+
+    const upCalls = (deps.composeUp as ReturnType<typeof mock>).mock.calls;
+    expect(upCalls).toHaveLength(2);
+    expect(upCalls[0][0].services).toEqual(["postgres", "lo1-my-platform-proxy"]);
+    expect(upCalls[1][0].services).toEqual(["api"]);
+
+    const waitCalls = (deps.composeWait as ReturnType<typeof mock>).mock.calls;
+    expect(waitCalls).toHaveLength(2);
+    expect(waitCalls[0][0].services).toEqual(["postgres", "lo1-my-platform-proxy"]);
+    expect(waitCalls[1][0].services).toEqual(["api"]);
+  });
+
+  it("should pass initTaskServices as waitForExit from extraCompose config", async () => {
+    const config = makeConfig({
+      extraCompose: {
+        file: "./infrastructure.compose.yaml",
+        initTaskServices: ["api_migrator", "localstack_init"],
+      },
+    });
+    const deps = makeDeps({
+      loadConfig: mock(() => Promise.resolve(config)),
+      discoverExtraComposeServices: mock(() =>
+        Promise.resolve(["postgres", "api_migrator", "localstack_init"]),
+      ),
+      generateCompose: mock(() => ({
+        yaml: "version: '3'",
+        projectName: "lo1-my-platform",
+        fileArgs: [".lo1/docker-compose.yml", "./infrastructure.compose.yaml"],
+        pluginEnvVars: {},
+        infraServices: ["lo1-my-platform-proxy"],
+        appServices: [],
+      })),
+    });
+
+    await startWorkspace({}, deps);
+
+    const waitCalls = (deps.composeWait as ReturnType<typeof mock>).mock.calls;
+    expect(waitCalls).toHaveLength(1);
+    expect(waitCalls[0][0].waitForExit).toEqual(["api_migrator", "localstack_init"]);
+  });
+
+  it("should include service-level initTask in waitForExit", async () => {
+    const config = makeConfig({
+      services: {
+        api: {
+          type: "service",
+          path: "./services/api",
+          port: 3000,
+          mode: "dev",
+          command: "npm start",
+          dependsOn: [],
+          initTask: false,
+        },
+        migrator: {
+          type: "service",
+          path: "./services/migrator",
+          mode: "container",
+          containerImage: "migrator:latest",
+          dependsOn: [],
+          initTask: true,
+        },
+      },
+    });
+    const deps = makeDeps({
+      loadConfig: mock(() => Promise.resolve(config)),
+      buildDag: mock(() => ({
+        layers: [["api", "migrator"]],
+        order: ["api", "migrator"],
+        serviceCount: 2,
+      })),
+      generateCompose: mock(() => ({
+        yaml: "version: '3'",
+        projectName: "lo1-my-platform",
+        fileArgs: [".lo1/docker-compose.yml"],
+        pluginEnvVars: {},
+        infraServices: ["lo1-my-platform-proxy"],
+        appServices: ["migrator"],
+      })),
+    });
+
+    await startWorkspace({}, deps);
+
+    const waitCalls = (deps.composeWait as ReturnType<typeof mock>).mock.calls;
+    // Infra wait includes migrator in waitForExit
+    expect(waitCalls[0][0].waitForExit).toContain("migrator");
+    // App wait also includes migrator since it's in appServices
+    expect(waitCalls[1][0].waitForExit).toContain("migrator");
+  });
+
+  it("should skip composeUp and composeWait when no infra or app services", async () => {
+    const deps = makeDeps({
+      generateCompose: mock(() => ({
+        yaml: "version: '3'",
+        projectName: "lo1-my-platform",
+        fileArgs: [".lo1/docker-compose.yml"],
+        pluginEnvVars: {},
+        infraServices: [],
+        appServices: [],
+      })),
+    });
+
+    await startWorkspace({}, deps);
+
+    expect(deps.composeUp).not.toHaveBeenCalled();
+    expect(deps.composeWait).not.toHaveBeenCalled();
   });
 
   it("should write initial state after infra and update after services", async () => {
@@ -312,7 +445,7 @@ describe("startWorkspace", () => {
       .map((e) => e.phase);
 
     expect(phases).toContain("Loading config");
-    expect(phases).toContain("Starting infrastructure");
+    expect(phases).toContain("Starting infrastructure"); // default mock has infraServices
     expect(phases).toContain("Starting services");
     expect(phases).toContain("Ready");
   });
@@ -442,6 +575,7 @@ describe("startWorkspace", () => {
           mode: "dev",
           command: "start",
           dependsOn: [],
+          initTask: false,
         },
         svcB: {
           type: "service",
@@ -450,6 +584,7 @@ describe("startWorkspace", () => {
           mode: "dev",
           command: "start",
           dependsOn: [],
+          initTask: false,
         },
       },
     });
