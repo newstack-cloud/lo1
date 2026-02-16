@@ -46,10 +46,23 @@ jobs:
 
       - run: bun run build
 
+      - name: Resolve workspace dependencies
+        run: |
+          SDK_VERSION=$(jq -r .version packages/sdk/package.json)
+          for pkg in packages/cli plugins/celerity; do
+            tmp=$(mktemp)
+            jq --arg v "$SDK_VERSION" \
+              '.dependencies["@lo1/sdk"] = $v' \
+              "$pkg/package.json" > "$tmp"
+            mv "$tmp" "$pkg/package.json"
+          done
+
       - name: Publish packages
         run: |
-          bunx npm publish --access public --provenance -w packages/sdk
-          bunx npm publish --access public --provenance -w packages/cli
-          bunx npm publish --access public --provenance -w plugins/celerity
+          for pkg in packages/sdk packages/cli plugins/celerity; do
+            cd "$pkg"
+            bunx npm publish --access public --provenance
+            cd -
+          done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

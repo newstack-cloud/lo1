@@ -1,6 +1,6 @@
 # @lo1/cli
 
-CLI for [lo1](../../README.md) - multi-service local development environment.
+CLI for [lo1](../../README.md) - A multi-service local development environment.
 
 ## Installation
 
