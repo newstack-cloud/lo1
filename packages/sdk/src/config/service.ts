@@ -23,6 +23,7 @@ export const serviceConfigSchema = z.object({
   hooks: serviceHooksSchema.optional(),
   dependsOn: z.array(z.string()).default([]),
   initTask: z.boolean().default(false),
+  readinessProbe: z.string().url().optional(),
 });
 
 export type ServiceConfig = z.infer<typeof serviceConfigSchema>;

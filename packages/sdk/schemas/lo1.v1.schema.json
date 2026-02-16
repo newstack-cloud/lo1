@@ -159,6 +159,10 @@
               "initTask": {
                 "type": "boolean",
                 "default": false
+              },
+              "readinessProbe": {
+                "type": "string",
+                "format": "uri"
               }
             },
             "required": [
