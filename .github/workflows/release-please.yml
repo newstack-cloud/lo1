@@ -36,24 +36,24 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: actions/setup-node@v4
+        with:
+          registry-url: https://registry.npmjs.org
+
       - uses: oven-sh/setup-bun@v2
 
       - run: bun install --frozen-lockfile
 
       - run: bun run build
 
-      - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Publish packages
         run: |
           for pkg in packages/sdk packages/cli plugins/celerity; do
             if [ -f "$pkg/package.json" ]; then
               cd "$pkg"
-              bun publish --access public --provenance
+              bunx npm publish --access public --provenance
               cd -
             fi
           done
         env:
-          NPM_CONFIG_PROVENANCE: true
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
