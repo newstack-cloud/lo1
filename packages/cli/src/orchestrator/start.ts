@@ -1,5 +1,9 @@
 import { join } from "node:path";
 import type { Plugin, PluginContext, WorkspaceConfig, ComposeContribution } from "@lo1/sdk";
+import { createLog } from "../debug";
+import { Lo1Error } from "../errors";
+
+const debug = createLog("orchestrator");
 import { createLineBuffer } from "../output/line-buffer";
 import type { EndpointRegistry } from "../discovery/registry";
 import { loadWorkspaceConfig } from "../config/loader";
@@ -32,9 +36,9 @@ import type {
 } from "./types";
 import type { ServiceHandle } from "./service";
 
-export class OrchestratorError extends Error {
+export class OrchestratorError extends Lo1Error {
   constructor(message: string) {
-    super(message);
+    super(message, "OrchestratorError");
     this.name = "OrchestratorError";
   }
 }
@@ -108,6 +112,7 @@ export async function startWorkspace(
   options: StartOptions,
   overrides: Partial<OrchestratorDeps> = {},
 ): Promise<StartResult> {
+  debug("startWorkspace: dir=%s", options.workspaceDir ?? ".");
   const deps = { ...createDefaultDeps(), ...overrides };
   const emit = options.onEvent ?? (() => {});
   const workspaceDir = options.workspaceDir ?? ".";
@@ -129,6 +134,7 @@ export async function startWorkspace(
   };
   await deps.writeState(baseState, workspaceDir);
 
+  debug("startWorkspace: starting compose phases");
   const logsHandle = await startComposePhases(
     deps,
     composeResult,
@@ -139,6 +145,7 @@ export async function startWorkspace(
   );
 
   if (config.proxy?.tls?.enabled) {
+    debug("startWorkspace: trusting Caddy CA");
     emit({ kind: "phase", phase: "Trusting Caddy CA" });
     await deps.trustCaddyCa(`${composeResult.projectName}-proxy`, workspaceDir);
   }
@@ -156,12 +163,15 @@ export async function startWorkspace(
 
   await runWorkspaceHook({ hookName: "postInfrastructure", ...hookCtx });
 
+  debug("startWorkspace: provisioning infrastructure");
   emit({ kind: "phase", phase: "Provisioning infrastructure" });
   await runPluginProvisioning(config, plugins, registry, workspaceDir);
 
+  debug("startWorkspace: seeding data");
   emit({ kind: "phase", phase: "Seeding data" });
   await runPluginSeeding(config, plugins, registry, workspaceDir);
 
+  debug("startWorkspace: starting services");
   emit({ kind: "phase", phase: "Starting services" });
   const handles = await startServicesInLayers({
     layers: dag.layers,
@@ -479,7 +489,14 @@ async function startServicesInLayers(ctx: LayerStartContext): Promise<ServiceHan
   const allHandles: ServiceHandle[] = [];
 
   try {
-    for (const layer of ctx.layers) {
+    for (let i = 0; i < ctx.layers.length; i++) {
+      const layer = ctx.layers[i];
+      debug(
+        "startServicesInLayers: layer %d/%d, %d services",
+        i + 1,
+        ctx.layers.length,
+        layer.length,
+      );
       checkAborted(ctx.signal);
 
       const layerPromises = layer

@@ -1,13 +1,17 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { platform } from "node:os";
+import { createLog } from "../debug";
+import { Lo1Error } from "../errors";
 
-export class HookError extends Error {
+const debug = createLog("hooks");
+
+export class HookError extends Lo1Error {
   constructor(
     message: string,
     public readonly hookName: string,
     public readonly exitCode: number | null,
   ) {
-    super(message);
+    super(message, "HookError", { hook: hookName, exitCode });
     this.name = "HookError";
   }
 }
@@ -52,6 +56,7 @@ export async function executeHook(
   },
   spawnFn: SpawnFn = defaultSpawn,
 ): Promise<HookResult> {
+  debug("executeHook: name=%s command=%s cwd=%s", hookName, command, options.cwd);
   const { cmd, args } = getShellArgs(command);
   const mergedEnv: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
@@ -83,6 +88,7 @@ export async function executeHook(
     });
 
     child.on("close", (code) => {
+      debug("executeHook: name=%s exit=%d", hookName, code);
       if (code === 0) {
         resolve({ exitCode: 0, hookName });
       } else {

@@ -48,6 +48,10 @@ export function createEventFormatter(): EventFormatter {
         return `${color(YELLOW, "[hook]")} ${event.output.text}`;
       case "output":
         return `${color(serviceColor(event.line.service), `[${event.line.service}]`)} ${event.line.text}`;
+      case "probe": {
+        const attempt = event.attempt !== undefined ? ` (attempt ${event.attempt})` : "";
+        return `${color(CYAN + BOLD, "[lo1]")} ${event.service}: probe ${event.status}${attempt}`;
+      }
       case "error":
         return `${color(RED, "[error]")} ${event.message}`;
     }

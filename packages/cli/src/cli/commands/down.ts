@@ -13,14 +13,9 @@ export const downCommand = new Command("down")
       if (msg) process.stdout.write(msg.trimEnd() + "\n");
     };
 
-    try {
-      await stopWorkspace({
-        workspaceDir: process.cwd(),
-        clean: options.clean === true,
-        onEvent,
-      });
-    } catch (err) {
-      console.error(err instanceof Error ? err.message : String(err));
-      process.exitCode = 1;
-    }
+    await stopWorkspace({
+      workspaceDir: process.cwd(),
+      clean: options.clean === true,
+      onEvent,
+    });
   });

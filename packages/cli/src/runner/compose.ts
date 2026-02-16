@@ -2,15 +2,19 @@ import { execFile, spawn } from "node:child_process";
 import type { EventEmitter } from "node:events";
 import { promisify } from "node:util";
 import { createLineBuffer } from "../output/line-buffer";
+import { createLog } from "../debug";
+import { Lo1Error } from "../errors";
+
+const debug = createLog("runner:compose");
 
 const defaultExec = promisify(execFile);
 
-export class ComposeExecError extends Error {
+export class ComposeExecError extends Lo1Error {
   constructor(
     message: string,
     public readonly stderr?: string,
   ) {
-    super(message);
+    super(message, "ComposeExecError", stderr ? { stderr } : undefined);
     this.name = "ComposeExecError";
   }
 }
@@ -86,6 +90,7 @@ export async function composeUp(
   options: ComposeExecOptions,
   spawnFn: ComposeSpawnFn = spawn,
 ): Promise<void> {
+  debug("composeUp: project=%s services=%o", options.projectName, options.services ?? []);
   const args = [...buildBaseArgs(options), "up", "-d", "--build"];
   if (options.services?.length) {
     args.push(...options.services);
@@ -206,6 +211,7 @@ export async function composeWait(
   options: ComposeWaitOptions,
   exec: ExecFn = defaultExec,
 ): Promise<void> {
+  debug("composeWait: services=%o", options.services);
   const pollInterval = options.pollInterval ?? 2000;
   const timeout = options.timeout ?? 300_000;
   const startTime = Date.now();
@@ -279,6 +285,7 @@ export async function composeDown(
   options: ComposeExecOptions & { clean?: boolean },
   exec: ExecFn = defaultExec,
 ): Promise<void> {
+  debug("composeDown: project=%s clean=%s", options.projectName, !!options.clean);
   const args = [...buildBaseArgs(options), "down"];
   if (options.clean) {
     args.push("-v", "--remove-orphans");
@@ -299,6 +306,7 @@ export async function composePs(
   options: ComposeExecOptions,
   exec: ExecFn = defaultExec,
 ): Promise<ComposeServiceStatus[]> {
+  debug("composePs: project=%s", options.projectName);
   const args = [...buildBaseArgs(options), "ps", "-a", "--format", "json"];
 
   let result: { stdout: string };

@@ -166,6 +166,7 @@ export const upCommand = new Command("up")
     };
 
     let result: Awaited<ReturnType<typeof startWorkspace>> | undefined;
+    let startupError: unknown;
     try {
       result = await startWorkspace({
         workspaceDir,
@@ -186,8 +187,7 @@ export const upCommand = new Command("up")
       await waitForShutdownSignal(controller);
     } catch (err) {
       if (!controller.signal.aborted) {
-        console.error(err instanceof Error ? err.message : String(err));
-        process.exitCode = 1;
+        startupError = err;
       }
     }
 
@@ -199,4 +199,6 @@ export const upCommand = new Command("up")
       clean,
       onEvent,
     });
+
+    if (startupError) throw startupError;
   });

@@ -2,10 +2,14 @@ import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { platform } from "node:os";
 import { join } from "node:path";
+import { createLog } from "../debug";
+import { Lo1Error } from "../errors";
 
-export class HostsError extends Error {
+const debug = createLog("proxy");
+
+export class HostsError extends Lo1Error {
   constructor(message: string) {
-    super(message);
+    super(message, "HostsError");
     this.name = "HostsError";
   }
 }
@@ -54,10 +58,12 @@ export function removeHostsBlock(currentContent: string): string {
 }
 
 export async function applyHosts(block: string): Promise<void> {
+  debug("applyHosts: writing hosts block (%d bytes)", block.length);
   await modifyHostsFile((content) => replaceHostsBlock(content, block));
 }
 
 export async function removeHosts(): Promise<void> {
+  debug("removeHosts: clearing lo1 hosts block");
   await modifyHostsFile(removeHostsBlock);
 }
 

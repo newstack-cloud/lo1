@@ -1,5 +1,7 @@
 import { resolve } from "node:path";
 import type { Plugin, WorkspaceConfig, ServiceConfig, ContainerInput } from "@lo1/sdk";
+import { createLog } from "../debug";
+import { Lo1Error } from "../errors";
 import type { EndpointRegistry } from "../discovery/registry";
 import type { OutputLine } from "../runner/process";
 import type { HookOutput } from "../hooks/executor";
@@ -7,11 +9,14 @@ import { startProcess as defaultStartProcess } from "../runner/process";
 import { startContainer as defaultStartContainer } from "../runner/container";
 import { executeHook as defaultExecuteHook } from "../hooks/executor";
 import { buildServiceEnv as defaultBuildServiceEnv } from "../discovery/registry";
+import { waitForReady as defaultWaitForReady } from "../readiness/probe";
 import { projectId, networkId } from "../compose/generate";
 
-export class ServiceStartError extends Error {
+const debug = createLog("orchestrator");
+
+export class ServiceStartError extends Lo1Error {
   constructor(message: string) {
-    super(message);
+    super(message, "ServiceStartError");
     this.name = "ServiceStartError";
   }
 }
@@ -43,6 +48,7 @@ export type StartServiceDeps = {
   startContainer: typeof defaultStartContainer;
   executeHook: typeof defaultExecuteHook;
   buildServiceEnv: typeof defaultBuildServiceEnv;
+  waitForReady: typeof defaultWaitForReady;
 };
 
 const defaultDeps: StartServiceDeps = {
@@ -50,6 +56,7 @@ const defaultDeps: StartServiceDeps = {
   startContainer: defaultStartContainer,
   executeHook: defaultExecuteHook,
   buildServiceEnv: defaultBuildServiceEnv,
+  waitForReady: defaultWaitForReady,
 };
 
 export const BUILTIN_TYPES = new Set(["service", "app"]);
@@ -62,6 +69,12 @@ export async function startService(
   const hasPluginContainer = plugin?.configureContainer !== undefined;
   const isBuiltin = BUILTIN_TYPES.has(serviceConfig.type);
   const consumerMode = determineConsumerMode(serviceConfig, hasPluginContainer);
+  const runner = hasPluginContainer
+    ? "container (plugin)"
+    : isBuiltin && serviceConfig.mode === "dev"
+      ? "process"
+      : "compose";
+  debug("startService: name=%s mode=%s runner=%s", serviceName, serviceConfig.mode, runner);
 
   const env = deps.buildServiceEnv(
     serviceName,
@@ -98,6 +111,19 @@ export async function startService(
         `has no valid runner: needs a plugin with configureContainer(), a command for dev mode, ` +
         `or a containerImage/compose file for container mode`,
     );
+  }
+
+  if (serviceConfig.readinessProbe) {
+    try {
+      await deps.waitForReady({
+        url: serviceConfig.readinessProbe,
+        serviceName,
+        signal: options.signal,
+      });
+    } catch (err) {
+      await handle.stop();
+      throw err;
+    }
   }
 
   await runHookIfDefined(

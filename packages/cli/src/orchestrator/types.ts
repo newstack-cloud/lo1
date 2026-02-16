@@ -19,6 +19,7 @@ export type OrchestratorEvent =
   | { kind: "service"; service: string; status: "starting" | "started" | "stopping" | "stopped" }
   | { kind: "hook"; hook: string; output: HookOutput }
   | { kind: "output"; line: OutputLine }
+  | { kind: "probe"; service: string; status: "polling" | "ready" | "failed"; attempt?: number }
   | { kind: "error"; message: string };
 
 export type OrchestratorDeps = {

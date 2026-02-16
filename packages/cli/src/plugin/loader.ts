@@ -1,12 +1,16 @@
 import { resolve } from "node:path";
 import type { Plugin, PluginContext, PluginFactory } from "@lo1/sdk";
+import { createLog } from "../debug";
+import { Lo1Error } from "../errors";
 
-export class PluginError extends Error {
+const debug = createLog("plugin");
+
+export class PluginError extends Lo1Error {
   constructor(
     message: string,
     public readonly pluginName?: string,
   ) {
-    super(message);
+    super(message, "PluginError", pluginName ? { plugin: pluginName } : undefined);
     this.name = "PluginError";
   }
 }
@@ -28,6 +32,7 @@ export async function loadPlugin(
   importFn: ImportFn = defaultImport,
 ): Promise<Plugin> {
   const resolved = resolveSpecifier(specifier, context.workspaceDir);
+  debug("loadPlugin: specifier=%s resolved=%s", specifier, resolved);
 
   let mod: { default?: unknown };
   try {
@@ -51,6 +56,14 @@ export async function loadPlugin(
   const factory = mod.default as PluginFactory;
   const plugin = await factory(context);
 
+  const methods = [
+    plugin.contributeCompose && "contributeCompose",
+    plugin.configureContainer && "configureContainer",
+    plugin.provisionInfra && "provisionInfra",
+    plugin.seedData && "seedData",
+  ].filter(Boolean);
+  debug("loadPlugin: name=%s methods=%o", plugin.name, methods);
+
   if (!plugin.name) {
     throw new PluginError(`Plugin "${specifier}" factory returned a plugin with no name`);
   }
@@ -63,6 +76,7 @@ export async function loadPlugins(
   context: PluginContext,
   importFn: ImportFn = defaultImport,
 ): Promise<Map<string, Plugin>> {
+  debug("loadPlugins: %d declared", Object.keys(declarations).length);
   const plugins = new Map<string, Plugin>();
 
   for (const [key, specifier] of Object.entries(declarations)) {

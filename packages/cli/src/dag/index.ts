@@ -1,4 +1,8 @@
 import type { WorkspaceConfig } from "@lo1/sdk";
+import { createLog } from "../debug";
+import { Lo1Error } from "../errors";
+
+const debug = createLog("dag");
 
 export type ExecutionLayer = string[];
 
@@ -7,22 +11,27 @@ export type DagResult = {
   serviceCount: number;
 };
 
-export class DagError extends Error {
-  constructor(message: string) {
-    super(message);
+export class DagError extends Lo1Error {
+  constructor(message: string, code: string, details?: Record<string, unknown>) {
+    super(message, code, details);
     this.name = "DagError";
   }
 }
 
 export function buildDag(config: WorkspaceConfig): DagResult {
   const serviceNames = Object.keys(config.services);
+  debug("buildDag: %d services", serviceNames.length);
 
   // Validate all dependency references exist
   for (const name of serviceNames) {
     const deps = config.services[name].dependsOn;
     for (const dep of deps) {
       if (!(dep in config.services)) {
-        throw new DagError(`Service "${name}" depends on unknown service "${dep}"`);
+        throw new DagError(
+          `Service "${name}" depends on unknown service "${dep}"`,
+          "UnknownDependency",
+          { service: name, dependency: dep },
+        );
       }
     }
   }
@@ -80,9 +89,14 @@ export function buildDag(config: WorkspaceConfig): DagResult {
   }
 
   if (remaining > 0) {
-    throw new DagError("Cycle detected in service dependencies");
+    throw new DagError("Cycle detected in service dependencies", "CycleDetected");
   }
 
+  debug(
+    "buildDag: sorted into %d layers, sizes: %o",
+    layers.length,
+    layers.map((l) => l.length),
+  );
   return { layers, serviceCount: serviceNames.length };
 }
 
@@ -124,7 +138,11 @@ function dfs(
         current = parent.get(current);
       }
       cycle.reverse();
-      throw new DagError(`Dependency cycle detected: ${cycle.join(" → ")} → ${dep}`);
+      throw new DagError(
+        `Dependency cycle detected: ${cycle.join(" → ")} → ${dep}`,
+        "CycleDetected",
+        { services: cycle },
+      );
     }
 
     if (color.get(dep) === WHITE) {

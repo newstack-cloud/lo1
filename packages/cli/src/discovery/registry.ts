@@ -1,4 +1,7 @@
 import type { WorkspaceConfig, ServiceConfig } from "@lo1/sdk";
+import { createLog } from "../debug";
+
+const debug = createLog("discovery");
 
 export type ServiceEndpoint = {
   name: string;
@@ -24,6 +27,8 @@ export function buildEndpointRegistry(config: WorkspaceConfig): EndpointRegistry
   const tlsEnabled = config.proxy?.tls?.enabled === true;
   const scheme = tlsEnabled ? "https" : "http";
 
+  debug("buildEndpointRegistry: %d services", Object.keys(config.services).length);
+
   for (const [name, service] of Object.entries(config.services)) {
     if (!service.port || service.mode === "skip") continue;
 
@@ -39,6 +44,7 @@ export function buildEndpointRegistry(config: WorkspaceConfig): EndpointRegistry
     });
   }
 
+  debug("buildEndpointRegistry: %d endpoints registered", endpoints.size);
   return { endpoints };
 }
 
@@ -85,6 +91,7 @@ export function buildServiceEnv(
   pluginEnvVars: Record<string, string>,
   consumerMode: "container" | "host",
 ): Record<string, string> {
+  debug("buildServiceEnv: service=%s consumer=%s", serviceName, consumerMode);
   const discoveryVars = buildDiscoveryEnvVars(registry, consumerMode);
 
   const translatedPluginVars =

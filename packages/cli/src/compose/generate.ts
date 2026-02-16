@@ -3,6 +3,10 @@ import { join, resolve, isAbsolute } from "node:path";
 import { platform } from "node:os";
 import { dump as toYaml, load as parseYaml } from "js-yaml";
 import type { WorkspaceConfig, ComposeContribution, ComposeServiceDef } from "@lo1/sdk";
+import { createLog } from "../debug";
+import { Lo1Error } from "../errors";
+
+const debug = createLog("compose");
 
 export function projectId(workspaceName: string): string {
   return `lo1-${workspaceName}`;
@@ -16,9 +20,9 @@ export function proxyServiceId(workspaceName: string): string {
   return `lo1-${workspaceName}-proxy`;
 }
 
-export class ComposeError extends Error {
+export class ComposeError extends Lo1Error {
   constructor(message: string) {
-    super(message);
+    super(message, "ComposeError");
     this.name = "ComposeError";
   }
 }
@@ -51,6 +55,7 @@ export function generateCompose(
   contributions?: ComposeContribution[],
 ): ComposeResult {
   const projectName = projectId(config.name);
+  debug("generateCompose: project=%s", projectName);
 
   const doc: ComposeDocument = {
     name: projectName,
@@ -80,6 +85,7 @@ export function generateCompose(
   const fileArgs = buildFileArgs(config);
   const yaml = toYaml(doc, { noRefs: true, lineWidth: -1 });
 
+  debug("generateCompose: infra=%d app=%d services", infraServices.length, appServices.length);
   return { yaml, fileArgs, projectName, pluginEnvVars, infraServices, appServices };
 }
 
@@ -299,5 +305,6 @@ export async function writeComposeFile(yaml: string, workspaceDir = "."): Promis
   await mkdir(dir, { recursive: true });
   const filePath = join(dir, "compose.generated.yaml");
   await writeFile(filePath, yaml, "utf-8");
+  debug("writeComposeFile: %s", filePath);
   return filePath;
 }

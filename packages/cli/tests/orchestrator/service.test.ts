@@ -5,6 +5,7 @@ import {
   type StartServiceOptions,
   type StartServiceDeps,
 } from "../../src/orchestrator/service";
+import { ReadinessProbeError } from "../../src/readiness/probe";
 import type { WorkspaceConfig, Plugin, ServiceConfig } from "@lo1/sdk";
 import type { EndpointRegistry } from "../../src/discovery/registry";
 import { projectId, networkId } from "../../src/compose/generate";
@@ -51,7 +52,7 @@ function makeDeps(overrides: Partial<StartServiceDeps> = {}): StartServiceDeps {
       pid: 12345,
       running: true,
       stop: mock(() => Promise.resolve(0 as number | null)),
-      exitPromise: new Promise<number | null>(() => {}),
+      exitPromise: new Promise<number | null>(() => { }),
     })),
     startContainer: mock((_opts) =>
       Promise.resolve({
@@ -59,7 +60,7 @@ function makeDeps(overrides: Partial<StartServiceDeps> = {}): StartServiceDeps {
         containerId: "abc123",
         running: true,
         stop: mock(() => Promise.resolve()),
-        exitPromise: new Promise<number | null>(() => {}),
+        exitPromise: new Promise<number | null>(() => { }),
       }),
     ),
     executeHook: mock((_name, _cmd, _opts) =>
@@ -68,6 +69,7 @@ function makeDeps(overrides: Partial<StartServiceDeps> = {}): StartServiceDeps {
     buildServiceEnv: mock(
       (_name, _svc, _config, _reg, _plugin, _mode) => ({ PORT: "3000" }),
     ),
+    waitForReady: mock(() => Promise.resolve()),
     ...overrides,
   };
 }
@@ -191,7 +193,7 @@ describe("startService", () => {
           pid: 12345,
           running: true,
           stop: mock(() => Promise.resolve(0 as number | null)),
-          exitPromise: new Promise<number | null>(() => {}),
+          exitPromise: new Promise<number | null>(() => { }),
         };
       }),
     });
@@ -219,7 +221,7 @@ describe("startService", () => {
           pid: 12345,
           running: true,
           stop: mock(() => Promise.resolve(0 as number | null)),
-          exitPromise: new Promise<number | null>(() => {}),
+          exitPromise: new Promise<number | null>(() => { }),
         };
       }),
     });
@@ -275,7 +277,7 @@ describe("startService", () => {
     const deps = makeDeps();
     const options = makeOptions({ serviceConfig: config.services.api, config });
 
-    await expect(startService(options, deps)).rejects.toThrow(ServiceStartError);
+    expect(startService(options, deps)).rejects.toThrow(ServiceStartError);
   });
 
   it("should build service env with correct arguments", async () => {
@@ -289,5 +291,55 @@ describe("startService", () => {
     ).mock.calls[0];
     expect(name).toBe("api");
     expect(pluginEnv).toEqual({ DB_URL: "pg:5432" });
+  });
+
+  it("should call waitForReady when readinessProbe is configured and probe succeeds", async () => {
+    const config = makeConfig({
+      api: { readinessProbe: "http://localhost:3000/health" },
+    });
+    const deps = makeDeps();
+    const options = makeOptions({ serviceConfig: config.services.api, config });
+
+    const handle = await startService(options, deps);
+
+    expect(handle.serviceName).toBe("api");
+    expect(deps.waitForReady).toHaveBeenCalledTimes(1);
+    const probeOpts = (deps.waitForReady as ReturnType<typeof mock>).mock.calls[0][0];
+    expect(probeOpts.url).toBe("http://localhost:3000/health");
+    expect(probeOpts.serviceName).toBe("api");
+  });
+
+  it("should stop process and throw when readinessProbe fails", async () => {
+    const config = makeConfig({
+      api: { readinessProbe: "http://localhost:3000/health" },
+    });
+    const stopMock = mock(() => Promise.resolve(0 as number | null));
+    const deps = makeDeps({
+      startProcess: mock((_opts) => ({
+        serviceName: _opts.serviceName,
+        pid: 12345,
+        running: true,
+        stop: stopMock,
+        exitPromise: new Promise<number | null>(() => { }),
+      })),
+      waitForReady: mock(() =>
+        Promise.reject(
+          new ReadinessProbeError("api", "http://localhost:3000/health", "timed out"),
+        ),
+      ),
+    });
+    const options = makeOptions({ serviceConfig: config.services.api, config });
+
+    expect(startService(options, deps)).rejects.toThrow(ReadinessProbeError);
+    expect(stopMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("should not call waitForReady when readinessProbe is not configured", async () => {
+    const deps = makeDeps();
+    const options = makeOptions();
+
+    await startService(options, deps);
+
+    expect(deps.waitForReady).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,9 @@
 import type { WorkspaceConfig } from "@lo1/sdk";
+import { Lo1Error } from "../errors";
 
-export class FilterError extends Error {
+export class FilterError extends Lo1Error {
   constructor(message: string) {
-    super(message);
+    super(message, "FilterError");
     this.name = "FilterError";
   }
 }

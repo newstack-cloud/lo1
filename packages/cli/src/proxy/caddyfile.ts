@@ -2,6 +2,9 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { WorkspaceConfig } from "@lo1/sdk";
 import { collectDomains } from "./domains";
+import { createLog } from "../debug";
+
+const debug = createLog("proxy");
 
 export type CaddyfileResult = {
   content: string;
@@ -27,6 +30,12 @@ export function generateCaddyfile(config: WorkspaceConfig): CaddyfileResult {
   const content = blocks.join("\n\n") + "\n";
   const domains = collectDomains(config);
 
+  debug(
+    "generateCaddyfile: %d routes, tls=%s, %d domains",
+    routeMap.size,
+    tlsEnabled,
+    domains.length,
+  );
   return { content, domains };
 }
 
@@ -92,5 +101,6 @@ export async function writeCaddyfile(content: string, workspaceDir = "."): Promi
   await mkdir(dir, { recursive: true });
   const filePath = join(dir, "Caddyfile");
   await writeFile(filePath, content, "utf-8");
+  debug("writeCaddyfile: %s", filePath);
   return filePath;
 }

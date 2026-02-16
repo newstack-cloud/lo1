@@ -1,9 +1,13 @@
 import { spawn, type ChildProcess, type StdioOptions } from "node:child_process";
 import { platform } from "node:os";
+import { createLog } from "../debug";
+import { Lo1Error } from "../errors";
 
-export class ProcessRunnerError extends Error {
+const debug = createLog("runner:process");
+
+export class ProcessRunnerError extends Lo1Error {
   constructor(message: string) {
-    super(message);
+    super(message, "ProcessRunnerError");
     this.name = "ProcessRunnerError";
   }
 }
@@ -58,6 +62,7 @@ export function startProcess(
   options: ProcessRunnerOptions,
   spawnFn: SpawnFn = defaultSpawn,
 ): ProcessHandle {
+  debug("startProcess: command=%s cwd=%s", options.command, options.cwd);
   const { cmd, args } = getShellArgs(options.command);
   const mergedEnv: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
@@ -70,6 +75,7 @@ export function startProcess(
     env: mergedEnv,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  debug("startProcess: pid=%d", child.pid);
 
   let isRunning = true;
 
@@ -98,6 +104,7 @@ export function startProcess(
       resolve(null);
     });
     child.on("close", (code) => {
+      debug("process closed: pid=%d exit=%d", child.pid, code);
       isRunning = false;
       resolve(code);
     });

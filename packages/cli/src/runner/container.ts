@@ -2,12 +2,16 @@ import { execFile, spawn, type ChildProcess, type StdioOptions } from "node:chil
 import { promisify } from "node:util";
 import type { ContainerConfig } from "@lo1/sdk";
 import type { OutputLine } from "./process";
+import { createLog } from "../debug";
+import { Lo1Error } from "../errors";
+
+const debug = createLog("runner:container");
 
 const defaultExec = promisify(execFile);
 
-export class ContainerRunnerError extends Error {
+export class ContainerRunnerError extends Lo1Error {
   constructor(message: string) {
-    super(message);
+    super(message, "ContainerRunnerError");
     this.name = "ContainerRunnerError";
   }
 }
@@ -79,6 +83,8 @@ export async function startContainer(
   exec: ExecFn = defaultExec,
   logSpawn: LogSpawnFn = defaultLogSpawn,
 ): Promise<ContainerHandle> {
+  const name = containerName(options);
+  debug("startContainer: name=%s image=%s", name, options.containerConfig.image);
   const args = buildRunArgs(options);
 
   let result: { stdout: string };
@@ -92,6 +98,7 @@ export async function startContainer(
   }
 
   const containerId = result.stdout.trim();
+  debug("startContainer: id=%s", containerId);
   let isRunning = true;
 
   const logChild = logSpawn("docker", ["logs", "-f", containerId], {
@@ -134,6 +141,7 @@ export async function startContainer(
   const stop = async (timeoutMs?: number): Promise<void> => {
     const timeout = timeoutMs !== undefined ? Math.ceil(timeoutMs / 1000) : DEFAULT_STOP_TIMEOUT;
     const name = containerName(options);
+    debug("stopContainer: name=%s", name);
 
     try {
       await exec("docker", ["stop", "-t", String(timeout), name]);

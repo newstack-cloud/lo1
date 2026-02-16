@@ -1,6 +1,9 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { createLog } from "../debug";
 import { loadWorkspaceConfig } from "../config/loader";
+
+const debug = createLog("orchestrator");
 import { composeDown } from "../runner/compose";
 import { executeHook } from "../hooks/executor";
 import { readState as defaultReadState, removeState as defaultRemoveState } from "./state";
@@ -105,6 +108,7 @@ export async function stopWorkspace(
   const deps = { ...createDefaultStopDeps(), ...overrides };
   const emit = options.onEvent ?? (() => {});
   const workspaceDir = options.workspaceDir ?? ".";
+  debug("stopWorkspace: dir=%s", workspaceDir);
 
   emit({ kind: "phase", phase: "Reading workspace state" });
   const state = await deps.readState(workspaceDir);
@@ -131,6 +135,7 @@ export async function stopWorkspace(
   }
 
   const handles = options.handles ?? hydrateHandles(state, deps.exec);
+  debug("stopWorkspace: %d handles to stop", handles.length);
 
   if (handles.length > 0) {
     emit({ kind: "phase", phase: "Stopping services" });

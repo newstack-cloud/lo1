@@ -3,6 +3,10 @@ import { execFile } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { createLog } from "../debug";
+import { Lo1Error } from "../errors";
+
+const debug = createLog("proxy");
 
 const defaultExec = promisify(execFile);
 
@@ -19,9 +23,9 @@ export type TlsDeps = {
   certRetryIntervalMs: number;
 };
 
-export class TlsError extends Error {
+export class TlsError extends Lo1Error {
   constructor(message: string) {
-    super(message);
+    super(message, "TlsError");
     this.name = "TlsError";
   }
 }
@@ -67,6 +71,7 @@ export async function trustCaddyCa(
   workspaceDir = ".",
   overrides: Partial<TlsDeps> = {},
 ): Promise<void> {
+  debug("trustCaddyCa: container=%s", containerName);
   const deps = { ...createDefaultDeps(), ...overrides };
   const certDir = join(workspaceDir, ".lo1");
   const certPath = join(certDir, CERT_FILE);
@@ -76,7 +81,11 @@ export async function trustCaddyCa(
   const certHash = deps.hash(cert);
 
   const cachedHash = await deps.readFile(hashPath);
-  if (cachedHash && cachedHash.trim() === certHash) return;
+  if (cachedHash && cachedHash.trim() === certHash) {
+    debug("trustCaddyCa: cache hit, skipping install");
+    return;
+  }
+  debug("trustCaddyCa: cache miss, installing cert");
 
   await deps.mkdir(certDir);
   await deps.writeFile(certPath, cert);
