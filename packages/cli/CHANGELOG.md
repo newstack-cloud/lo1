@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/newstack-cloud/lo1/compare/cli/v0.2.0...cli/v0.2.1) (2026-02-16)
+
+
+### Bug Fixes
+
+* **cli:** bump up from broken release ([156accf](https://github.com/newstack-cloud/lo1/commit/156accf077f1ecf5d23b5547eeea2fea41991529))
+
 ## [0.2.0](https://github.com/newstack-cloud/lo1/compare/cli/v0.1.0...cli/v0.2.0) (2026-02-16)
 
 
