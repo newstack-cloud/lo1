@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/newstack-cloud/lo1/compare/cli/v0.2.2...cli/v0.2.3) (2026-02-16)
+
+
+### Bug Fixes
+
+* **cli:** add fix for internal package dependencies ([f56adf0](https://github.com/newstack-cloud/lo1/commit/f56adf056649ff79d7e14a00f29a985849dafd7f))
+
 ## [0.2.2](https://github.com/newstack-cloud/lo1/compare/cli/v0.2.1...cli/v0.2.2) (2026-02-16)
 
 
