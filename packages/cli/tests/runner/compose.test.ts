@@ -42,7 +42,7 @@ beforeEach(() => {
 
 describe("composeUp", () => {
   it("should spawn docker compose with correct project and file args", async () => {
-    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild() as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild());
     await composeUp(defaultOptions, spawnMock);
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
@@ -58,7 +58,7 @@ describe("composeUp", () => {
   });
 
   it("should include up -d --build without --wait", async () => {
-    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild() as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild());
     await composeUp(defaultOptions, spawnMock);
 
     const args = spawnMock.mock.calls[0][1] as string[];
@@ -72,7 +72,7 @@ describe("composeUp", () => {
     const child = createMockChild();
     // Prevent auto-close so we can emit data first
     child.removeAllListeners("close");
-    const spawnMock = mock<ComposeSpawnFn>(() => child as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => child);
     const lines: { stream: string; text: string }[] = [];
 
     const promise = composeUp(
@@ -91,7 +91,7 @@ describe("composeUp", () => {
   });
 
   it("should throw ComposeExecError on non-zero exit", async () => {
-    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild(1) as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild(1));
 
     expect(composeUp(defaultOptions, spawnMock)).rejects.toThrow(ComposeExecError);
     expect(composeUp(defaultOptions, spawnMock)).rejects.toThrow(/exit code 1/);
@@ -100,7 +100,7 @@ describe("composeUp", () => {
   it("should kill child on abort signal", async () => {
     const child = createMockChild();
     child.removeAllListeners("close");
-    const spawnMock = mock<ComposeSpawnFn>(() => child as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => child);
     const ac = new AbortController();
 
     const promise = composeUp({ ...defaultOptions, signal: ac.signal }, spawnMock);
@@ -112,7 +112,7 @@ describe("composeUp", () => {
   });
 
   it("should append service names when services option is provided", async () => {
-    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild() as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild());
     await composeUp({ ...defaultOptions, services: ["postgres", "redis"] }, spawnMock);
 
     const args = spawnMock.mock.calls[0][1] as string[];
@@ -122,7 +122,7 @@ describe("composeUp", () => {
   });
 
   it("should not append service names when services is empty", async () => {
-    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild() as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild());
     await composeUp({ ...defaultOptions, services: [] }, spawnMock);
 
     const args = spawnMock.mock.calls[0][1] as string[];
@@ -154,7 +154,7 @@ describe("composeLogs", () => {
   it("should spawn docker compose logs with follow, no-color, and since 0s", () => {
     const child = createMockChild();
     child.removeAllListeners("close");
-    const spawnMock = mock<ComposeSpawnFn>(() => child as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => child);
 
     composeLogs(defaultOptions, () => { }, spawnMock);
 
@@ -175,7 +175,7 @@ describe("composeLogs", () => {
   it("should parse docker compose log lines with service names", () => {
     const child = createMockChild();
     child.removeAllListeners("close");
-    const spawnMock = mock<ComposeSpawnFn>(() => child as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => child);
     const lines: ComposeLogLine[] = [];
 
     composeLogs(defaultOptions, (line) => lines.push(line), spawnMock);
@@ -191,7 +191,7 @@ describe("composeLogs", () => {
   it("should handle stderr output", () => {
     const child = createMockChild();
     child.removeAllListeners("close");
-    const spawnMock = mock<ComposeSpawnFn>(() => child as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => child);
     const lines: ComposeLogLine[] = [];
 
     composeLogs(defaultOptions, (line) => lines.push(line), spawnMock);
@@ -205,7 +205,7 @@ describe("composeLogs", () => {
   it("should handle partial lines across chunks", () => {
     const child = createMockChild();
     child.removeAllListeners("close");
-    const spawnMock = mock<ComposeSpawnFn>(() => child as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => child);
     const lines: ComposeLogLine[] = [];
 
     composeLogs(defaultOptions, (line) => lines.push(line), spawnMock);
@@ -221,7 +221,7 @@ describe("composeLogs", () => {
   it("should return a handle that kills the child process", () => {
     const child = createMockChild();
     child.removeAllListeners("close");
-    const spawnMock = mock<ComposeSpawnFn>(() => child as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => child);
 
     const handle = composeLogs(defaultOptions, () => { }, spawnMock);
     handle.kill();
@@ -232,7 +232,7 @@ describe("composeLogs", () => {
   it("should kill child on abort signal", () => {
     const child = createMockChild();
     child.removeAllListeners("close");
-    const spawnMock = mock<ComposeSpawnFn>(() => child as any);
+    const spawnMock = mock<ComposeSpawnFn>(() => child);
     const ac = new AbortController();
 
     composeLogs({ ...defaultOptions, signal: ac.signal }, () => { }, spawnMock);

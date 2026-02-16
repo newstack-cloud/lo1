@@ -1,4 +1,5 @@
-import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import type { EventEmitter } from "node:events";
 import { promisify } from "node:util";
 import { createLineBuffer } from "../output/line-buffer";
 
@@ -52,11 +53,18 @@ export type ComposeLogsHandle = {
   kill: () => void;
 };
 
+/** Minimal subset of ChildProcess used by compose runners. */
+export type SpawnedChild = EventEmitter & {
+  stdout: EventEmitter | null;
+  stderr: EventEmitter | null;
+  kill(signal?: NodeJS.Signals | number): unknown;
+};
+
 export type ComposeSpawnFn = (
   cmd: string,
   args: string[],
   options: { cwd?: string; stdio: ["ignore", "pipe", "pipe"] },
-) => ChildProcess;
+) => SpawnedChild;
 
 function buildBaseArgs(options: ComposeExecOptions): string[] {
   const args = [
@@ -114,7 +122,7 @@ export async function composeUp(
       options.onOutput?.({ stream: "stderr", text });
     });
 
-    child.on("close", (code) => {
+    child.on("close", (code: number | null) => {
       options.signal?.removeEventListener("abort", onAbort);
       if (options.signal?.aborted) {
         reject(new ComposeExecError("docker compose up aborted"));
@@ -130,7 +138,7 @@ export async function composeUp(
       }
     });
 
-    child.on("error", (err) => {
+    child.on("error", (err: Error) => {
       options.signal?.removeEventListener("abort", onAbort);
       reject(new ComposeExecError(`docker compose up failed: ${err.message}`));
     });
