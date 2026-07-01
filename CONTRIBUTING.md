@@ -80,6 +80,16 @@ bun --filter @lo1/sdk test
 Coverage thresholds are enforced at the **aggregate** level (not per-file) via
 `scripts/check-coverage.ts`. Edit the `THRESHOLDS` constant to adjust.
 
+## Schema
+
+This project uses Zod to define the primary schema that is made available through the SDK. You can regenerate the accompanying JSON Schema by running:
+
+```bash
+bun run build:schema
+```
+
+_It also runs automatically on `bun run build`._
+
 ## Conventional Commits
 
 This project uses [conventional commits](https://www.conventionalcommits.org/) enforced by commitlint.
@@ -91,6 +101,7 @@ Format: `type(scope): description`
 **Scopes**: `cli`, `sdk`, `plugin-celerity`, `ci`, `repo`, `deps`
 
 Examples:
+
 ```
 feat(cli): add service status dashboard
 fix(sdk): correct proxy config schema validation
