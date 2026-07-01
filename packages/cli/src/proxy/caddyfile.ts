@@ -61,7 +61,12 @@ function buildRouteMap(config: WorkspaceConfig, baseDomain: string): Map<string,
     }
 
     if (service.proxy?.domain) {
-      addRoute(routeMap, service.proxy.domain, { type: "reverse_proxy", upstream });
+      const domains = Array.isArray(service.proxy.domain)
+        ? service.proxy.domain
+        : [service.proxy.domain];
+      for (const domain of domains) {
+        addRoute(routeMap, domain, { type: "reverse_proxy", upstream });
+      }
     }
   }
 

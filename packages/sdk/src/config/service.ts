@@ -2,7 +2,7 @@ import { z } from "zod";
 import { serviceHooksSchema } from "./hooks";
 
 export const serviceProxySchema = z.object({
-  domain: z.string().optional(),
+  domain: z.union([z.string(), z.array(z.string())]).optional(),
   pathPrefix: z.string().optional(),
 });
 

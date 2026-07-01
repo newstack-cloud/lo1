@@ -19,7 +19,12 @@ export function collectDomains(config: WorkspaceConfig): string[] {
     }
 
     if (service.proxy?.domain) {
-      domains.add(service.proxy.domain);
+      const serviceDomains = Array.isArray(service.proxy.domain)
+        ? service.proxy.domain
+        : [service.proxy.domain];
+      for (const domain of serviceDomains) {
+        domains.add(domain);
+      }
     }
   }
 
