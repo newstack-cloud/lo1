@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/newstack-cloud/lo1/compare/sdk/v0.2.3...sdk/v0.3.0) (2026-07-01)
+
+
+### Features
+
+* **cli:** add support for multiple domains for a single service ([fb89e01](https://github.com/newstack-cloud/lo1/commit/fb89e01069b72fb06b08c612fcad219ccb65e5eb))
+
+
+### Bug Fixes
+
+* **cli:** add missing licenses and use dynamic version from package manifest ([6468252](https://github.com/newstack-cloud/lo1/commit/6468252db451f5a70ea98741f1583627ea13c23d))
+
 ## [0.2.3](https://github.com/newstack-cloud/lo1/compare/sdk/v0.2.2...sdk/v0.2.3) (2026-02-16)
 
 
