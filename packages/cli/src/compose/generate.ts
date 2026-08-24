@@ -3,6 +3,7 @@ import { join, resolve, isAbsolute } from "node:path";
 import { platform } from "node:os";
 import { dump as toYaml, load as parseYaml } from "js-yaml";
 import type { WorkspaceConfig, ComposeContribution, ComposeServiceDef } from "@lo1/sdk";
+import { ACME_DOCKERFILE, acmeEnvironment, getAcmeConfig, proxyImageTag } from "../tls/acme";
 import { createLog } from "../debug";
 import { Lo1Error } from "../errors";
 
@@ -41,6 +42,7 @@ type ComposeDocService = ComposeServiceDef & {
   networks?: string[];
   restart?: string;
   extra_hosts?: string[];
+  build?: { context: string; dockerfile: string };
 };
 
 type ComposeDocument = {
@@ -164,6 +166,8 @@ function addProxyService(doc: ComposeDocument, config: WorkspaceConfig): void {
     networks: [networkId(config.name)],
   };
 
+  applyAcmeImage(proxySvc, config);
+
   // On Linux, Docker Engine doesn't provide host.docker.internal by default
   if (platform() === "linux") {
     proxySvc.extra_hosts = ["host.docker.internal:host-gateway"];
@@ -171,6 +175,25 @@ function addProxyService(doc: ComposeDocument, config: WorkspaceConfig): void {
 
   doc.services[proxyServiceId(config.name)] = proxySvc;
   doc.volumes["caddy_data"] = {};
+}
+
+/**
+ * Under `mode: acme` the proxy runs a Caddy build that includes the DNS
+ * provider module, and receives the provider credentials by env passthrough.
+ */
+function applyAcmeImage(proxySvc: ComposeDocService, config: WorkspaceConfig): void {
+  const acme = getAcmeConfig(config);
+  if (!acme) return;
+
+  proxySvc.image = proxyImageTag(acme);
+  if (!acme.image) {
+    proxySvc.build = { context: ".lo1", dockerfile: ACME_DOCKERFILE };
+  }
+
+  const environment = acmeEnvironment(acme);
+  if (Object.keys(environment).length > 0) {
+    proxySvc.environment = { ...proxySvc.environment, ...environment };
+  }
 }
 
 /** Returns the extraCompose file path from either the string or object form. */

@@ -67,9 +67,79 @@
                   "type": "number",
                   "default": 443
                 },
-                "certDir": {
+                "mode": {
                   "type": "string",
-                  "default": ".lo1/certs"
+                  "enum": [
+                    "internal",
+                    "acme"
+                  ],
+                  "default": "internal"
+                },
+                "acme": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "module": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "ca": {
+                      "type": "string",
+                      "default": "letsencrypt"
+                    },
+                    "tokenEnv": {
+                      "type": "string"
+                    },
+                    "arg": {
+                      "type": "string"
+                    },
+                    "env": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "default": []
+                    },
+                    "options": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "default": {}
+                    },
+                    "resolvers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "default": []
+                    },
+                    "propagationTimeout": {
+                      "type": "string"
+                    },
+                    "domains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "default": []
+                    },
+                    "caddyVersion": {
+                      "type": "string",
+                      "default": "2"
+                    },
+                    "image": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "provider"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false

@@ -356,3 +356,59 @@ describe("extraComposeInitTasks", () => {
     expect(extraComposeInitTasks(config)).toEqual([]);
   });
 });
+
+describe("generateCompose proxy TLS", () => {
+  const acmeProxy = (acme: Record<string, unknown> = {}) => ({
+    proxy: {
+      enabled: true,
+      port: 80,
+      tld: "dev",
+      tls: {
+        enabled: true,
+        port: 443,
+        mode: "acme",
+        acme: {
+          provider: "cloudflare",
+          tokenEnv: "CF_API_TOKEN",
+          ca: "letsencrypt",
+          env: [],
+          options: {},
+          resolvers: [],
+          domains: [],
+          caddyVersion: "2",
+          ...acme,
+        },
+      },
+    },
+  });
+
+  it("should build a custom caddy image in acme mode", () => {
+    const config = makeConfig({ api: { mode: "dev", port: 3000 } }, acmeProxy());
+
+    const proxy = parseResult(generateCompose(config).yaml).services[proxyServiceId("test-ws")];
+
+    expect(proxy.build).toEqual({ context: ".lo1", dockerfile: "Dockerfile.proxy" });
+    expect(proxy.image).toStartWith("lo1-caddy-cloudflare:");
+  });
+
+  it("should pass DNS credentials through by interpolation, not by value", () => {
+    const config = makeConfig({ api: { mode: "dev", port: 3000 } }, acmeProxy());
+
+    const result = generateCompose(config);
+    const proxy = parseResult(result.yaml).services[proxyServiceId("test-ws")];
+
+    expect(proxy.environment).toEqual({ CF_API_TOKEN: "${CF_API_TOKEN}" });
+  });
+
+  it("should skip the build when a prebuilt image is configured", () => {
+    const config = makeConfig(
+      { api: { mode: "dev", port: 3000 } },
+      acmeProxy({ image: "ghcr.io/me/caddy:1" }),
+    );
+
+    const proxy = parseResult(generateCompose(config).yaml).services[proxyServiceId("test-ws")];
+
+    expect(proxy.build).toBeUndefined();
+    expect(proxy.image).toBe("ghcr.io/me/caddy:1");
+  });
+});

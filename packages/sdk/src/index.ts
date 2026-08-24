@@ -23,6 +23,7 @@ export {
   serviceProxySchema,
   proxyConfigSchema,
   tlsConfigSchema,
+  acmeConfigSchema,
   serviceHooksSchema,
   workspaceHooksSchema,
   type WorkspaceConfig,
@@ -31,6 +32,7 @@ export {
   type ServiceProxy,
   type ProxyConfig,
   type TlsConfig,
+  type AcmeConfig,
   type ServiceHooks,
   type WorkspaceHooks,
 } from "./config/index";

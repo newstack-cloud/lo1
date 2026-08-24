@@ -73,6 +73,7 @@ function makeDeps(overrides: Partial<OrchestratorDeps> = {}): OrchestratorDeps {
     generateCaddyfile: mock(() => ({
       content: "caddy config",
       domains: ["api.my-platform.local"],
+      internalDomains: ["api.my-platform.local"],
     })),
     writeCaddyfile: mock(() => Promise.resolve(".lo1/Caddyfile")),
     generateHostsBlock: mock(() => "127.0.0.1 api.my-platform.local"),
@@ -458,9 +459,9 @@ describe("startWorkspace", () => {
         enabled: true,
         tls: {
           port: 443,
-          certDir: ".",
-          enabled: true
-        }
+          enabled: true,
+          mode: "internal",
+          }
       }
     });
     const deps = makeDeps({

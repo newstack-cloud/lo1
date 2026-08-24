@@ -96,7 +96,7 @@ describe("buildEndpointRegistry", () => {
 
   it("should use https proxy URL when TLS enabled", () => {
     const config = makeConfig({
-      proxy: { enabled: true, port: 80, tld: "local", tls: { enabled: true, port: 443, certDir: ".lo1/certs" } },
+      proxy: { enabled: true, port: 80, tld: "local", tls: { enabled: true, port: 443, mode: "internal" } },
     });
 
     const registry = buildEndpointRegistry(config);

@@ -10,7 +10,14 @@ export {
   type ServiceConfig,
   type ServiceProxy,
 } from "./service";
-export { proxyConfigSchema, tlsConfigSchema, type ProxyConfig, type TlsConfig } from "./proxy";
+export {
+  proxyConfigSchema,
+  tlsConfigSchema,
+  acmeConfigSchema,
+  type ProxyConfig,
+  type TlsConfig,
+  type AcmeConfig,
+} from "./proxy";
 export {
   serviceHooksSchema,
   workspaceHooksSchema,

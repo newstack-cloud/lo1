@@ -121,3 +121,117 @@ describe("generateCaddyfile", () => {
     expect(result.domains).toContain("myapp.dev");
   });
 });
+
+const acmeTls = (acme: Record<string, unknown> = {}) => ({
+  proxy: {
+    enabled: true,
+    port: 80,
+    tld: "dev",
+    tls: {
+      enabled: true,
+      port: 443,
+      mode: "acme",
+      acme: {
+        provider: "cloudflare",
+        tokenEnv: "CF_API_TOKEN",
+        ca: "letsencrypt",
+        env: [],
+        options: {},
+        resolvers: [],
+        domains: [],
+        caddyVersion: "2",
+        ...acme,
+      },
+    },
+  },
+});
+
+describe("generateCaddyfile with ACME", () => {
+  it("should render a global options block with the CA directory", () => {
+    const config = makeConfig({ api: { mode: "dev", port: 3000 } }, acmeTls({ email: "me@x.dev" }));
+
+    const result = generateCaddyfile(config);
+
+    expect(result.content).toStartWith("{\n  email me@x.dev\n");
+    expect(result.content).toContain("acme_ca https://acme-v02.api.letsencrypt.org/directory");
+  });
+
+  it("should render a dns challenge block per site", () => {
+    const config = makeConfig({ api: { mode: "dev", port: 3000 } }, acmeTls());
+
+    const result = generateCaddyfile(config);
+
+    expect(result.content).toContain("api.my-app.dev {");
+    expect(result.content).toContain("dns cloudflare {env.CF_API_TOKEN}");
+  });
+
+  it("should never trust the internal CA in acme mode", () => {
+    const config = makeConfig({ api: { mode: "dev", port: 3000 } }, acmeTls());
+
+    const result = generateCaddyfile(config);
+
+    expect(result.internalDomains).toEqual([]);
+    expect(result.content).not.toContain("tls internal");
+  });
+
+  it("should fold hosts under a declared wildcard into one site", () => {
+    const config = makeConfig(
+      { api: { mode: "dev", port: 3000 }, web: { mode: "dev", port: 4000 } },
+      acmeTls({ domains: ["*.my-app.dev"] }),
+    );
+
+    const result = generateCaddyfile(config);
+
+    expect(result.content).toContain("*.my-app.dev {");
+    expect(result.content).not.toContain("api.my-app.dev {");
+    expect(result.content).toContain("@api_my_app_dev host api.my-app.dev");
+    expect(result.content).toContain("@web_my_app_dev host web.my-app.dev");
+  });
+
+  it("should route requests through the host matcher in a wildcard site", () => {
+    const config = makeConfig(
+      { api: { mode: "dev", port: 3000 } },
+      acmeTls({ domains: ["*.my-app.dev"] }),
+    );
+
+    const result = generateCaddyfile(config);
+
+    expect(result.content).toContain("handle @api_my_app_dev {");
+    expect(result.content).toContain("    reverse_proxy host.docker.internal:3000");
+  });
+
+  it("should use the internal CA for hosts outside the declared domains", () => {
+    const config = makeConfig(
+      { api: { mode: "dev", port: 3000, proxy: { domain: "api.local.example.com" } } },
+      acmeTls({ domains: ["*.local.example.com"] }),
+    );
+
+    const result = generateCaddyfile(config);
+
+    expect(result.content).toContain("*.local.example.com {");
+    expect(result.content).toContain("api.my-app.dev {");
+    expect(result.internalDomains).toEqual(["api.my-app.dev"]);
+  });
+
+  it("should not send a non-public host to ACME alongside a real domain", () => {
+    const config = makeConfig(
+      { api: { mode: "dev", port: 3000, proxy: { domain: "api.local.example.com" } } },
+      acmeTls({ domains: ["*.local.example.com"] }),
+    );
+
+    const blocks = generateCaddyfile(config).content.split("\n\n");
+    const internalBlock = blocks.find((b) => b.startsWith("api.my-app.dev {"));
+
+    expect(internalBlock).toContain("tls internal");
+    expect(internalBlock).not.toContain("dns cloudflare");
+  });
+
+  it("should still cover every host when no domains are declared", () => {
+    const config = makeConfig({ api: { mode: "dev", port: 3000 } }, acmeTls());
+
+    const result = generateCaddyfile(config);
+
+    expect(result.internalDomains).toEqual([]);
+    expect(result.content).toContain("dns cloudflare {env.CF_API_TOKEN}");
+  });
+});

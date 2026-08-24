@@ -36,6 +36,7 @@ export type OrchestratorDeps = {
   ) => ComposeResult;
   writeComposeFile: (yaml: string, workspaceDir?: string) => Promise<string>;
   generateCaddyfile: (config: WorkspaceConfig) => CaddyfileResult;
+  writeProxyDockerfile: (config: WorkspaceConfig, workspaceDir?: string) => Promise<string | null>;
   writeCaddyfile: (content: string, workspaceDir?: string) => Promise<string>;
   generateHostsBlock: (domains: string[]) => string;
   applyHosts: (block: string) => Promise<void>;

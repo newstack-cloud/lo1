@@ -17,12 +17,13 @@ import {
   extraComposeFile,
   extraComposeInitTasks,
 } from "../compose/generate";
-import { generateCaddyfile, writeCaddyfile } from "../proxy/caddyfile";
+import { generateCaddyfile, writeCaddyfile, type CaddyfileResult } from "../proxy/caddyfile";
 import { generateHostsBlock, applyHosts } from "../hosts/index";
 import { composeUp, composeWait, composeLogs, type ComposeLogLine } from "../runner/compose";
 import { loadPlugins } from "../plugin/loader";
 import { executeHook } from "../hooks/executor";
 import { trustCaddyCa as defaultTrustCaddyCa } from "../tls/setup";
+import { getAcmeConfig, verifyAcmeEnv, writeProxyDockerfile } from "../tls/acme";
 import { startService as defaultStartService, BUILTIN_TYPES } from "./service";
 import { writeState as defaultWriteState } from "./state";
 import { resolveServiceFilter } from "./filter";
@@ -81,6 +82,8 @@ function createDefaultDeps(): OrchestratorDeps {
     writeComposeFile,
     generateCaddyfile,
     writeCaddyfile,
+    writeProxyDockerfile: (config, workspaceDir) =>
+      writeProxyDockerfile(getAcmeConfig(config), workspaceDir),
     generateHostsBlock,
     applyHosts,
     removeHosts: () => import("../hosts/index").then((m) => m.removeHosts()),
@@ -106,6 +109,7 @@ type PrepareResult = {
   plugins: Map<string, Plugin>;
   composeResult: ReturnType<OrchestratorDeps["generateCompose"]>;
   initTaskServices: string[];
+  caddyResult: CaddyfileResult;
 };
 
 export async function startWorkspace(
@@ -120,7 +124,7 @@ export async function startWorkspace(
   await cleanupStaleWorkspace(deps, workspaceDir, emit);
 
   const prepared = await prepareWorkspaceConfig(deps, options, workspaceDir, emit);
-  const { config, dag, registry, plugins, composeResult, initTaskServices } = prepared;
+  const { config, dag, registry, plugins, composeResult, initTaskServices, caddyResult } = prepared;
 
   checkAborted(options.signal);
 
@@ -144,8 +148,8 @@ export async function startWorkspace(
     emit,
   );
 
-  if (config.proxy?.tls?.enabled) {
-    debug("startWorkspace: trusting Caddy CA");
+  if (config.proxy?.tls?.enabled && caddyResult.internalDomains.length > 0) {
+    debug("startWorkspace: trusting Caddy CA for %d domain(s)", caddyResult.internalDomains.length);
     emit({ kind: "phase", phase: "Trusting Caddy CA" });
     await deps.trustCaddyCa(`${composeResult.projectName}-proxy`, workspaceDir);
   }
@@ -247,6 +251,7 @@ async function prepareWorkspaceConfig(
   const contributions = await collectContributions(config, plugins);
 
   emit({ kind: "phase", phase: "Generating compose and proxy config" });
+  await prepareTls(deps, config, workspaceDir);
   const composeResult = deps.generateCompose(config, contributions);
   await deps.writeComposeFile(composeResult.yaml, workspaceDir);
   await preprocessServiceComposeFiles(config, workspaceDir);
@@ -269,7 +274,23 @@ async function prepareWorkspaceConfig(
   const hostsBlock = deps.generateHostsBlock(caddyResult.domains);
   if (hostsBlock) await deps.applyHosts(hostsBlock);
 
-  return { config, dag, registry, plugins, composeResult, initTaskServices };
+  return { config, dag, registry, plugins, composeResult, initTaskServices, caddyResult };
+}
+
+/**
+ * Validates TLS prerequisites and writes the proxy Dockerfile before anything
+ * is generated, so a missing DNS credential fails before containers start.
+ */
+async function prepareTls(
+  deps: OrchestratorDeps,
+  config: WorkspaceConfig,
+  workspaceDir: string,
+): Promise<void> {
+  const acme = getAcmeConfig(config);
+  if (!acme) return;
+
+  verifyAcmeEnv(acme);
+  await deps.writeProxyDockerfile(config, workspaceDir);
 }
 
 async function startComposePhases(
