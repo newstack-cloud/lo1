@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/newstack-cloud/lo1/compare/sdk/v0.3.0...sdk/v0.4.0) (2026-08-24)
+
+
+### Features
+
+* **cli:** add support for real public tls certs ([6a49c72](https://github.com/newstack-cloud/lo1/commit/6a49c723b6425558195e961e941debeaa67a8b00))
+
 ## [0.3.0](https://github.com/newstack-cloud/lo1/compare/sdk/v0.2.3...sdk/v0.3.0) (2026-07-01)
 
 
