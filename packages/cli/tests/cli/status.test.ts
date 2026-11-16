@@ -1,6 +1,7 @@
 import { describe, it, expect, mock } from "bun:test";
 import {
   getWorkspaceStatus,
+  formatStatus,
   type StatusDeps,
 } from "../../src/cli/commands/status";
 import type { WorkspaceState } from "../../src/orchestrator/types";
@@ -62,6 +63,8 @@ function makeDeps(overrides: Partial<StatusDeps> = {}): StatusDeps {
     loadConfig: mock(() =>
       Promise.resolve(makeConfig({ api: { port: 3000, hostPort: 3001 } })),
     ),
+    isProcessAlive: mock(() => true),
+    inspectContainer: mock(() => Promise.resolve("running")),
     ...overrides,
   };
 }
@@ -162,8 +165,14 @@ describe("getWorkspaceStatus", () => {
 
   it("services include port and hostPort from config", async () => {
     const deps = makeDeps({
+      readState: mock(() =>
+        Promise.resolve(makeWorkspaceState({ services: { api: { runner: "compose" } } })),
+      ),
+      composePs: mock(() => Promise.resolve([makeComposeStatus({ Service: "api" })])),
       loadConfig: mock(() =>
-        Promise.resolve(makeConfig({ api: { port: 3000, hostPort: 3001 } })),
+        Promise.resolve(
+          makeConfig({ api: { port: 3000, hostPort: 3001, mode: "container", command: undefined } }),
+        ),
       ),
     });
 
@@ -191,5 +200,122 @@ describe("getWorkspaceStatus", () => {
     const apiService = result!.services.find((s) => s.name === "api");
     expect(apiService).toBeDefined();
     expect(apiService!.mode).toBe("container");
+  });
+
+  it("reports a dev process that has exited, and the workspace as not healthy", async () => {
+    const deps = makeDeps({ isProcessAlive: mock(() => false) });
+
+    const result = await getWorkspaceStatus("/workspace", deps);
+
+    expect(result!.services[0].state).toBe("exited");
+    expect(result!.healthy).toBe(false);
+  });
+
+  it("is healthy when every service runs and infrastructure is healthy", async () => {
+    const result = await getWorkspaceStatus("/workspace", makeDeps());
+
+    expect(result!.healthy).toBe(true);
+    expect(result!.services[0]).toMatchObject({
+      name: "api",
+      state: "running",
+      url: "http://api.my-platform.local",
+    });
+  });
+
+  it("reports compose service health from docker compose ps", async () => {
+    const deps = makeDeps({
+      readState: mock(() =>
+        Promise.resolve(makeWorkspaceState({ services: { worker: { runner: "compose" } } })),
+      ),
+      composePs: mock(() =>
+        Promise.resolve([
+          makeComposeStatus(),
+          makeComposeStatus({ Service: "worker", Health: "unhealthy" }),
+        ]),
+      ),
+      loadConfig: mock(() =>
+        Promise.resolve(makeConfig({ worker: { mode: "container", containerImage: "w:1" } })),
+      ),
+    });
+
+    const result = await getWorkspaceStatus("/workspace", deps);
+
+    expect(result!.services[0].state).toBe("unhealthy");
+    expect(result!.infrastructure.services).toEqual(["lo1-my-platform-proxy"]);
+    expect(result!.healthy).toBe(false);
+  });
+
+  it("leaves init tasks out of services", async () => {
+    const deps = makeDeps({
+      readState: mock(() =>
+        Promise.resolve(
+          makeWorkspaceState({
+            services: { api: { runner: "process", pid: 1 }, migrate: { runner: "compose" } },
+          }),
+        ),
+      ),
+      loadConfig: mock(() =>
+        Promise.resolve(makeConfig({ api: {}, migrate: { initTask: true, mode: "container" } })),
+      ),
+    });
+
+    const result = await getWorkspaceStatus("/workspace", deps);
+
+    expect(result!.services.map((s) => s.name)).toEqual(["api"]);
+  });
+
+  it("treats infrastructure init tasks that exited 0 as healthy, and non-zero as degraded", async () => {
+    const exited = (code: number) =>
+      makeDeps({
+        composePs: mock(() =>
+          Promise.resolve([
+            makeComposeStatus(),
+            makeComposeStatus({ Service: "migrator", State: "exited", ExitCode: code }),
+          ]),
+        ),
+      });
+
+    expect((await getWorkspaceStatus("/workspace", exited(0)))!.infrastructure.state).toBe(
+      "healthy",
+    );
+    expect((await getWorkspaceStatus("/workspace", exited(1)))!.infrastructure.state).toBe(
+      "degraded",
+    );
+  });
+
+  it('reports infrastructure "none" when the workspace has none, and stays healthy', async () => {
+    const config = { ...makeConfig({ api: {} }), proxy: { enabled: false, port: 80, tld: "local" } };
+    const deps = makeDeps({
+      composePs: mock(() => Promise.resolve([])),
+      loadConfig: mock(() => Promise.resolve(config)),
+    });
+
+    const result = await getWorkspaceStatus("/workspace", deps);
+
+    expect(result!.infrastructure.state).toBe("none");
+    expect(result!.healthy).toBe(true);
+    expect(result!.services[0].url).toBe("http://localhost:3000");
+  });
+});
+
+describe("formatStatus", () => {
+  it("shows health, infrastructure and each service's state", () => {
+    const text = formatStatus({
+      workspace: "shop",
+      healthy: false,
+      infrastructure: { state: "healthy", services: ["postgres"] },
+      services: [
+        { name: "api", state: "running", mode: "dev", port: 3000, url: "https://api.shop.local" },
+        { name: "worker", state: "exited", mode: "dev" },
+      ],
+    });
+
+    expect(text).toBe(
+      "Workspace: shop (not healthy)\n\n" +
+        "Infrastructure: healthy\n  postgres\n\n" +
+        "Services:\n" +
+        "  api     running  dev:3000  https://api.shop.local\n" +
+        "  worker  exited   dev\n",
+    );
   });
 });

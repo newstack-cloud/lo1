@@ -83,6 +83,15 @@ export type StartOptions = {
   onEvent?: (event: OrchestratorEvent) => void;
 };
 
+export type PhaseTiming = { name: string; ms: number };
+
+/**
+ * How long `lo1 up` took. Phases are "infrastructure" (when there is any),
+ * "setup" (postInfrastructure hook and plugin provisioning/seeding, when
+ * there are any) and "services" (every layer, init tasks included).
+ */
+export type StartTimings = { totalMs: number; phases: PhaseTiming[] };
+
 export type StartResult = {
   handles: ServiceHandle[];
   composeOptions: ComposeExecOptions;
@@ -95,6 +104,7 @@ export type StartResult = {
   registry: EndpointRegistry;
   pluginEnvVars: Record<string, string>;
   compose: ComposeContext;
+  timings: StartTimings;
 };
 
 export type StopOptions = {

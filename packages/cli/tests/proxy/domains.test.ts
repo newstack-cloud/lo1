@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import type { WorkspaceConfig } from "@lo1/sdk";
-import { collectDomains } from "../../src/proxy/domains";
+import { collectDomains, serviceUrl } from "../../src/proxy/domains";
 
 function makeConfig(
   services: Record<string, Record<string, unknown>>,
@@ -86,5 +86,42 @@ describe("collectDomains", () => {
     const domains = collectDomains(config);
 
     expect(domains).toContain("api.my-app.test");
+  });
+});
+
+describe("serviceUrl", () => {
+  const base = {
+    version: "1" as const,
+    name: "shop",
+    services: {
+      api: { type: "service", path: "./api", port: 3000, mode: "dev" as const, dependsOn: [], initTask: false },
+      db: {
+        type: "service",
+        path: "./db",
+        port: 5432,
+        hostPort: 15432,
+        mode: "container" as const,
+        dependsOn: [],
+        initTask: false,
+      },
+      worker: { type: "service", path: "./w", mode: "dev" as const, dependsOn: [], initTask: false },
+    },
+  };
+
+  it("should use the proxy domain, with a non-default proxy port", () => {
+    expect(serviceUrl(base, "api")).toBe("http://api.shop.local");
+    expect(serviceUrl({ ...base, proxy: { enabled: true, port: 8080, tld: "test" } }, "api")).toBe(
+      "http://api.shop.test:8080",
+    );
+  });
+
+  it("should go straight to the host port when the proxy is disabled", () => {
+    const noProxy = { ...base, proxy: { enabled: false, port: 80, tld: "local" } };
+    expect(serviceUrl(noProxy, "api")).toBe("http://localhost:3000");
+    expect(serviceUrl(noProxy, "db")).toBe("http://localhost:15432");
+  });
+
+  it("should have no URL for a service without a port", () => {
+    expect(serviceUrl(base, "worker")).toBeUndefined();
   });
 });

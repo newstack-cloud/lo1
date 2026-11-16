@@ -106,6 +106,26 @@ function makeDeps(overrides: Partial<OrchestratorDeps> = {}): OrchestratorDeps {
 }
 
 describe("startWorkspace", () => {
+  it("should time infrastructure and services, leaving out setup when there is none", async () => {
+    const result = await startWorkspace({}, makeDeps());
+
+    expect(result.timings.phases.map((p) => p.name)).toEqual(["infrastructure", "services"]);
+    expect(result.timings.totalMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("should time setup when a postInfrastructure hook runs", async () => {
+    const config = makeConfig({ hooks: { postInfrastructure: "./migrate.sh" } });
+    const deps = makeDeps({ loadConfig: mock(() => Promise.resolve(config)) });
+
+    const result = await startWorkspace({}, deps);
+
+    expect(result.timings.phases.map((p) => p.name)).toEqual([
+      "infrastructure",
+      "setup",
+      "services",
+    ]);
+  });
+
   it("should fail before starting anything when a port it needs is in use", async () => {
     const deps = makeDeps({
       findPortConflicts: mock(() =>

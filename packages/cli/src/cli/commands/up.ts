@@ -9,29 +9,44 @@ import { readState, writeState } from "../../orchestrator/state";
 import { startService, type ServiceHandle } from "../../orchestrator/service";
 import { executeHook } from "../../hooks/executor";
 import { loadWorkspaceConfig } from "../../config/loader";
-import { collectDomains } from "../../proxy/domains";
+import { collectDomains, serviceUrl } from "../../proxy/domains";
 import { initLogDir, appendLog, logDir } from "../../logs/writer";
 import { createEventFormatter } from "../../output/format";
 import type { WorkspaceConfig } from "@lo1/sdk";
-import type { OrchestratorEvent } from "../../orchestrator/types";
+import type { OrchestratorEvent, StartResult } from "../../orchestrator/types";
 
-function printReadySummary(config: WorkspaceConfig, workspaceDir: string, detached: boolean): void {
-  const tld = config.proxy?.tld ?? "local";
-  const tlsEnabled = config.proxy?.tls?.enabled === true;
-  const scheme = tlsEnabled ? "https" : "http";
-  const lines: string[] = ["", `  Workspace ${config.name} is ready!`, ""];
+function formatSeconds(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
+}
 
-  const serviceUrls: { name: string; url: string }[] = [];
-  for (const [name, service] of Object.entries(config.services)) {
-    if (service.mode === "skip" || service.initTask || !service.port) continue;
-    const domain = service.proxy?.domain ?? `${name}.${config.name}.${tld}`;
-    serviceUrls.push({ name, url: `${scheme}://${domain}` });
-  }
+type ReadyResult = Pick<StartResult, "config" | "timings">;
 
-  if (serviceUrls.length > 0) {
+function readyServices(config: WorkspaceConfig): { name: string; url: string }[] {
+  return Object.keys(config.services).flatMap((name) => {
+    const url = serviceUrl(config, name);
+    return url ? [{ name, url }] : [];
+  });
+}
+
+export function formatReadySummary(
+  result: ReadyResult,
+  workspaceDir: string,
+  detached: boolean,
+): string {
+  const { config, timings } = result;
+  const breakdown = timings.phases.map((p) => `${p.name} ${formatSeconds(p.ms)}`).join(" · ");
+  const lines: string[] = [
+    "",
+    `  Workspace ${config.name} is ready in ${formatSeconds(timings.totalMs)}`,
+    `    ${breakdown}`,
+    "",
+  ];
+
+  const services = readyServices(config);
+  if (services.length > 0) {
     lines.push("  Services:");
-    const maxName = Math.max(...serviceUrls.map((s) => s.name.length));
-    for (const { name, url } of serviceUrls) {
+    const maxName = Math.max(...services.map((s) => s.name.length));
+    for (const { name, url } of services) {
       lines.push(`    ${name.padEnd(maxName + 2)}${url}`);
     }
     lines.push("");
@@ -40,16 +55,27 @@ function printReadySummary(config: WorkspaceConfig, workspaceDir: string, detach
   lines.push(`  Logs:  ${logDir(workspaceDir)}`);
   lines.push("         Run lo1 logs [service] to tail, lo1 logs --list to see available");
   lines.push("");
-
-  if (detached) {
-    lines.push("  Run lo1 down to stop");
-  } else {
-    lines.push("  Press Ctrl+C to stop");
-  }
+  lines.push(detached ? "  Run lo1 down to stop" : "  Press Ctrl+C to stop");
   lines.push("");
 
-  process.stdout.write(lines.join("\n"));
+  return lines.join("\n");
 }
+
+/** The one line `lo1 --json up` prints to stdout once the workspace is ready. */
+export function buildReadyJson(result: ReadyResult, workspaceDir: string, detached: boolean) {
+  return {
+    workspace: result.config.name,
+    ready: true,
+    detached,
+    durationMs: result.timings.totalMs,
+    phases: result.timings.phases,
+    services: readyServices(result.config),
+    logs: logDir(workspaceDir),
+  };
+}
+
+/** Exit code when Ctrl+C interrupts startup before the workspace is ready. */
+export const EXIT_INTERRUPTED = 130;
 
 async function acquireSudo(): Promise<void> {
   if (platform() === "win32") return;
@@ -65,7 +91,7 @@ async function acquireSudo(): Promise<void> {
   if (needsHosts) reasons.push("update /etc/hosts");
   if (needsTls) reasons.push("trust TLS certificates");
 
-  console.log(`lo1 needs sudo to ${reasons.join(" and ")}.\n`);
+  console.error(`lo1 needs sudo to ${reasons.join(" and ")}.\n`);
 
   await new Promise<void>((resolve, reject) => {
     const proc = spawn("/usr/bin/sudo", ["-v"], { stdio: "inherit" });
@@ -75,7 +101,7 @@ async function acquireSudo(): Promise<void> {
     proc.on("error", reject);
   });
 
-  console.log();
+  console.error();
 }
 
 function waitForShutdownSignal(controller: AbortController): Promise<void> {
@@ -159,7 +185,8 @@ export const upCommand = new Command("up")
   .option("-d, --detach", "Start in the background and exit")
   .option("--skip-teardown", "Leave containers running on exit (useful for debugging)")
   .option("--clean", "Remove volumes and orphan containers on teardown")
-  .action(async (options) => {
+  .action(async function (this: Command, options) {
+    const json = this.optsWithGlobals().json === true;
     const detached = options.detach === true;
     const skipTeardown = options.skipTeardown === true;
     const clean = options.clean === true;
@@ -191,7 +218,8 @@ export const upCommand = new Command("up")
       }
 
       const msg = formatEvent(event);
-      if (msg) process.stdout.write(msg.trimEnd() + "\n");
+      // With --json, stdout carries only the final JSON line; progress goes to stderr.
+      if (msg) (json ? process.stderr : process.stdout).write(msg.trimEnd() + "\n");
     };
 
     let result: Awaited<ReturnType<typeof startWorkspace>> | undefined;
@@ -207,7 +235,11 @@ export const upCommand = new Command("up")
       });
 
       logOnly = true;
-      printReadySummary(result.config, workspaceDir, detached);
+      if (json) {
+        process.stdout.write(JSON.stringify(buildReadyJson(result, workspaceDir, detached)) + "\n");
+      } else {
+        process.stdout.write(formatReadySummary(result, workspaceDir, detached));
+      }
 
       if (detached) {
         result.logsHandle.kill();
@@ -254,4 +286,5 @@ export const upCommand = new Command("up")
     });
 
     if (startupError) throw startupError;
+    if (!result) process.exitCode = EXIT_INTERRUPTED;
   });

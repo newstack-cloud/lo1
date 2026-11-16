@@ -30,3 +30,32 @@ export function collectDomains(config: WorkspaceConfig): string[] {
 
   return [...domains];
 }
+
+function portSuffix(port: number, defaultPort: number): string {
+  return port === defaultPort ? "" : `:${port}`;
+}
+
+/**
+ * The URL to open a service at: through the proxy on its first domain, or
+ * straight to its host port when the proxy is disabled. Undefined for
+ * services with no port, skip-mode services and init tasks.
+ */
+export function serviceUrl(config: WorkspaceConfig, name: string): string | undefined {
+  const service = config.services[name];
+  if (!service?.port || service.mode === "skip" || service.initTask) return undefined;
+
+  if (config.proxy?.enabled === false) {
+    const port = service.mode === "container" ? (service.hostPort ?? service.port) : service.port;
+    return `http://localhost:${port}`;
+  }
+
+  const tls = config.proxy?.tls?.enabled === true;
+  const suffix = tls
+    ? portSuffix(config.proxy?.tls?.port ?? 443, 443)
+    : portSuffix(config.proxy?.port ?? 80, 80);
+  const custom = service.proxy?.domain;
+  const domain =
+    (Array.isArray(custom) ? custom[0] : custom) ??
+    `${name}.${config.name}.${config.proxy?.tld ?? "local"}`;
+  return `${tls ? "https" : "http"}://${domain}${suffix}`;
+}
