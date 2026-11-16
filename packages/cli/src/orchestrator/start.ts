@@ -28,6 +28,7 @@ import { startService as defaultStartService, BUILTIN_TYPES } from "./service";
 import { writeState as defaultWriteState } from "./state";
 import { resolveServiceFilter } from "./filter";
 import { hydrateHandles } from "./stop";
+import { findPortConflicts, PortConflictError } from "../doctor/ports";
 import type {
   OrchestratorDeps,
   StartOptions,
@@ -101,6 +102,7 @@ function createDefaultDeps(): OrchestratorDeps {
     readState: (dir) => import("./state").then((m) => m.readState(dir)),
     writeState: defaultWriteState,
     removeState: (dir) => import("./state").then((m) => m.removeState(dir)),
+    findPortConflicts: (config) => findPortConflicts(config),
   };
 }
 
@@ -247,6 +249,9 @@ async function prepareWorkspaceConfig(
   let config = await deps.loadConfig(options.configPath);
   config = applyModeOverride(config, options.modeOverride);
   config = applyFilter(config, options.serviceFilter);
+
+  const conflicts = await deps.findPortConflicts(config);
+  if (conflicts.length > 0) throw new PortConflictError(conflicts);
 
   emit({ kind: "phase", phase: "Building dependency graph" });
   const dag = deps.buildDag(config);
