@@ -162,13 +162,21 @@ describe("buildDiscoveryEnvVars", () => {
   });
 
   it("should give container consumers the host gateway address of dev-mode targets", () => {
+    const registry = buildEndpointRegistry(makeConfig());
+    const env = buildDiscoveryEnvVars(registry, "container");
+
+    expect(env["LO1_SERVICE_USERS_API_URL"]).toBe("http://host.docker.internal:8080");
+    expect(env["LO1_SERVICE_USERS_API_PORT"]).toBe("8080");
+  });
+
+  it("should ignore hostPort for dev-mode services, which listen on port directly", () => {
     const config = makeConfig();
     config.services["users-api"].hostPort = 18080;
     const registry = buildEndpointRegistry(config);
-    const env = buildDiscoveryEnvVars(registry, "container");
 
-    expect(env["LO1_SERVICE_USERS_API_URL"]).toBe("http://host.docker.internal:18080");
-    expect(env["LO1_SERVICE_USERS_API_PORT"]).toBe("18080");
+    expect(buildDiscoveryEnvVars(registry, "host")["LO1_SERVICE_USERS_API_URL"]).toBe(
+      "http://localhost:8080",
+    );
   });
 
   it("should generate localhost URLs for host consumers", () => {

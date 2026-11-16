@@ -1,14 +1,23 @@
 import { execFile } from "node:child_process";
+import { resolve } from "node:path";
 import { promisify } from "node:util";
+import type { WorkspaceConfig } from "@lo1/sdk";
 import { createLog } from "../debug";
 import { loadWorkspaceConfig } from "../config/loader";
-
-const debug = createLog("orchestrator");
+import { buildEndpointRegistry, buildServiceEnv } from "../discovery/registry";
 import { composeDown } from "../runner/compose";
 import { executeHook } from "../hooks/executor";
 import { readState as defaultReadState, removeState as defaultRemoveState } from "./state";
 import type { ServiceHandle } from "./service";
-import type { OrchestratorDeps, StopOptions, ServiceState, WorkspaceState } from "./types";
+import type {
+  OrchestratorDeps,
+  OrchestratorEvent,
+  StopOptions,
+  ServiceState,
+  WorkspaceState,
+} from "./types";
+
+const debug = createLog("orchestrator");
 
 const defaultExec = promisify(execFile);
 
@@ -141,6 +150,16 @@ export async function stopWorkspace(
     emit({ kind: "phase", phase: "Stopping services" });
     for (const handle of handles) {
       emit({ kind: "service", service: handle.serviceName, status: "stopping" });
+      if (config && handle.running) {
+        await runServicePreStop({
+          handle,
+          config,
+          workspaceDir,
+          deps,
+          emit,
+          signal: options.signal,
+        });
+      }
       await handle.stop();
       emit({ kind: "service", service: handle.serviceName, status: "stopped" });
     }
@@ -159,4 +178,40 @@ export async function stopWorkspace(
 
   await deps.removeState(workspaceDir);
   emit({ kind: "phase", phase: "Stopped" });
+}
+
+type ServicePreStopContext = {
+  handle: ServiceHandle;
+  config: WorkspaceConfig;
+  workspaceDir: string;
+  deps: StopDeps;
+  emit: (event: OrchestratorEvent) => void;
+  signal?: AbortSignal;
+};
+
+/**
+ * Runs a service's preStop hook with the same environment its other hooks get.
+ * A failing hook is reported but does not stop the rest of the teardown.
+ */
+async function runServicePreStop(ctx: ServicePreStopContext): Promise<void> {
+  const name = ctx.handle.serviceName;
+  const service = ctx.config.services[name];
+  const command = service?.hooks?.preStop;
+  if (!command) return;
+
+  const consumerMode = ctx.handle.type === "process" ? "host" : "container";
+  const registry = buildEndpointRegistry(ctx.config);
+  const env = buildServiceEnv(name, service, ctx.config, registry, {}, consumerMode);
+
+  try {
+    await ctx.deps.executeHook(`${name}:preStop`, command, {
+      cwd: resolve(ctx.workspaceDir, service.path),
+      env,
+      signal: ctx.signal,
+      onOutput: (output) => ctx.emit({ kind: "hook", hook: name, output }),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.emit({ kind: "error", message: `preStop hook for "${name}" failed: ${message}` });
+  }
 }
