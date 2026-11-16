@@ -33,6 +33,8 @@ import type {
   OrchestratorDeps,
   StartOptions,
   StartResult,
+  StartTimings,
+  PhaseTiming,
   OrchestratorEvent,
   ServiceState,
 } from "./types";
@@ -124,6 +126,7 @@ export async function startWorkspace(
   const deps = { ...createDefaultDeps(), ...overrides };
   const emit = options.onEvent ?? (() => {});
   const workspaceDir = options.workspaceDir ?? ".";
+  const timer = createPhaseTimer();
 
   await cleanupStaleWorkspace(deps, workspaceDir, emit);
 
@@ -159,6 +162,7 @@ export async function startWorkspace(
     emit({ kind: "phase", phase: "Trusting Caddy CA" });
     await deps.trustCaddyCa(`${composeResult.projectName}-proxy`, workspaceDir);
   }
+  timer.mark("infrastructure", infraLogs !== undefined);
 
   checkAborted(options.signal);
 
@@ -180,6 +184,7 @@ export async function startWorkspace(
   debug("startWorkspace: seeding data");
   emit({ kind: "phase", phase: "Seeding data" });
   await runPluginSeeding(config, plugins, registry, workspaceDir);
+  timer.mark("setup", hasSetupWork(config, plugins));
 
   debug("startWorkspace: starting services");
   emit({ kind: "phase", phase: "Starting services" });
@@ -204,6 +209,7 @@ export async function startWorkspace(
 
   await deps.writeState({ ...baseState, services: buildServiceState(handles) }, workspaceDir);
   await runWorkspaceHook({ hookName: "postSetup", ...hookCtx });
+  timer.mark("services", true);
 
   emit({ kind: "phase", phase: "Ready" });
   const composeOptions = {
@@ -226,7 +232,32 @@ export async function startWorkspace(
     registry,
     pluginEnvVars: composeResult.pluginEnvVars,
     compose: composeContext,
+    timings: timer.result(),
   };
+}
+
+/** Measures consecutive startup phases; `mark` closes the phase that just ran. */
+function createPhaseTimer() {
+  const startedAt = Date.now();
+  let phaseStart = startedAt;
+  const phases: PhaseTiming[] = [];
+  return {
+    mark(name: string, include: boolean) {
+      const now = Date.now();
+      if (include) phases.push({ name, ms: now - phaseStart });
+      phaseStart = now;
+    },
+    result: (): StartTimings => ({ totalMs: Date.now() - startedAt, phases }),
+  };
+}
+
+/** Whether anything runs between infrastructure and services worth timing on its own. */
+function hasSetupWork(config: WorkspaceConfig, plugins: Map<string, Plugin>): boolean {
+  if (config.hooks?.postInfrastructure) return true;
+  return Object.values(config.services).some((service) => {
+    const plugin = plugins.get(service.type);
+    return Boolean(plugin?.provisionInfra || plugin?.seedData);
+  });
 }
 
 async function cleanupStaleWorkspace(
