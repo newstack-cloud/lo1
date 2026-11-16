@@ -28,7 +28,7 @@
     "@lo1/sdk": "workspace:*",
     "commander": "^13.0.0",
     "debug": "^4.4.3",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.3.2"
   },
   "devDependencies": {
     "@types/bun": "latest",

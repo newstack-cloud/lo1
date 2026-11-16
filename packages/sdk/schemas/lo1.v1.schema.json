@@ -1,304 +1,317 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://lo1.dev/schemas/lo1.v1.schema.json",
-  "$ref": "#/definitions/lo1.v1",
-  "definitions": {
-    "lo1.v1": {
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1"
+    },
+    "name": {
+      "type": "string"
+    },
+    "plugins": {
       "type": "object",
-      "properties": {
-        "version": {
-          "type": "string",
-          "const": "1"
-        },
-        "name": {
-          "type": "string"
-        },
-        "plugins": {
-          "type": "object",
-          "additionalProperties": {
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "repositories": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "branch": {
             "type": "string"
           }
         },
-        "repositories": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "url": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              },
-              "branch": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "url",
-              "path"
-            ],
-            "additionalProperties": false
-          }
+        "required": [
+          "url",
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "proxy": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
         },
-        "proxy": {
+        "port": {
+          "default": 80,
+          "type": "number"
+        },
+        "tld": {
+          "default": "local",
+          "type": "string"
+        },
+        "tls": {
           "type": "object",
           "properties": {
             "enabled": {
-              "type": "boolean",
-              "default": true
+              "default": false,
+              "type": "boolean"
             },
             "port": {
-              "type": "number",
-              "default": 80
+              "default": 443,
+              "type": "number"
             },
-            "tld": {
+            "mode": {
+              "default": "internal",
               "type": "string",
-              "default": "local"
+              "enum": [
+                "internal",
+                "acme"
+              ]
             },
-            "tls": {
+            "acme": {
               "type": "object",
               "properties": {
-                "enabled": {
-                  "type": "boolean",
-                  "default": false
-                },
-                "port": {
-                  "type": "number",
-                  "default": 443
-                },
-                "mode": {
-                  "type": "string",
-                  "enum": [
-                    "internal",
-                    "acme"
-                  ],
-                  "default": "internal"
-                },
-                "acme": {
-                  "type": "object",
-                  "properties": {
-                    "provider": {
-                      "type": "string"
-                    },
-                    "module": {
-                      "type": "string"
-                    },
-                    "email": {
-                      "type": "string"
-                    },
-                    "ca": {
-                      "type": "string",
-                      "default": "letsencrypt"
-                    },
-                    "tokenEnv": {
-                      "type": "string"
-                    },
-                    "arg": {
-                      "type": "string"
-                    },
-                    "env": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "default": []
-                    },
-                    "options": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      },
-                      "default": {}
-                    },
-                    "resolvers": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "default": []
-                    },
-                    "propagationTimeout": {
-                      "type": "string"
-                    },
-                    "domains": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "default": []
-                    },
-                    "caddyVersion": {
-                      "type": "string",
-                      "default": "2"
-                    },
-                    "image": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "provider"
-                  ],
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        "services": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string"
-              },
-              "path": {
-                "type": "string"
-              },
-              "port": {
-                "type": "number"
-              },
-              "hostPort": {
-                "type": "number"
-              },
-              "mode": {
-                "type": "string",
-                "enum": [
-                  "dev",
-                  "container",
-                  "skip"
-                ],
-                "default": "dev"
-              },
-              "command": {
-                "type": "string"
-              },
-              "containerImage": {
-                "type": "string"
-              },
-              "plugin": {
-                "type": "object",
-                "additionalProperties": {}
-              },
-              "compose": {
-                "type": "string"
-              },
-              "env": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "proxy": {
-                "type": "object",
-                "properties": {
-                  "domain": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    ]
-                  },
-                  "pathPrefix": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              },
-              "hooks": {
-                "type": "object",
-                "properties": {
-                  "preStart": {
-                    "type": "string"
-                  },
-                  "postStart": {
-                    "type": "string"
-                  },
-                  "preStop": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              },
-              "dependsOn": {
-                "type": "array",
-                "items": {
+                "provider": {
                   "type": "string"
                 },
-                "default": []
-              },
-              "initTask": {
-                "type": "boolean",
-                "default": false
-              },
-              "readinessProbe": {
-                "type": "string",
-                "format": "uri"
-              }
-            },
-            "required": [
-              "type",
-              "path"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "extraCompose": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "properties": {
-                "file": {
+                "module": {
                   "type": "string"
                 },
-                "initTaskServices": {
+                "email": {
+                  "type": "string"
+                },
+                "ca": {
+                  "default": "letsencrypt",
+                  "type": "string"
+                },
+                "tokenEnv": {
+                  "type": "string"
+                },
+                "arg": {
+                  "type": "string"
+                },
+                "env": {
+                  "default": [],
                   "type": "array",
                   "items": {
                     "type": "string"
                   }
+                },
+                "options": {
+                  "default": {},
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "resolvers": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "propagationTimeout": {
+                  "type": "string"
+                },
+                "domains": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "caddyVersion": {
+                  "default": "2",
+                  "type": "string"
+                },
+                "image": {
+                  "type": "string"
                 }
               },
               "required": [
-                "file"
+                "provider"
               ],
               "additionalProperties": false
-            }
-          ]
-        },
-        "hooks": {
-          "type": "object",
-          "properties": {
-            "postInfrastructure": {
-              "type": "string"
-            },
-            "postSetup": {
-              "type": "string"
-            },
-            "preStop": {
-              "type": "string"
             }
           },
           "additionalProperties": false
         }
       },
-      "required": [
-        "version",
-        "name",
-        "services"
-      ],
+      "additionalProperties": false
+    },
+    "services": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "port": {
+            "type": "number"
+          },
+          "hostPort": {
+            "type": "number"
+          },
+          "mode": {
+            "default": "dev",
+            "type": "string",
+            "enum": [
+              "dev",
+              "container",
+              "skip"
+            ]
+          },
+          "command": {
+            "type": "string"
+          },
+          "containerImage": {
+            "type": "string"
+          },
+          "plugin": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "compose": {
+            "type": "string"
+          },
+          "env": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "proxy": {
+            "type": "object",
+            "properties": {
+              "domain": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "pathPrefix": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "hooks": {
+            "type": "object",
+            "properties": {
+              "preStart": {
+                "type": "string"
+              },
+              "postStart": {
+                "type": "string"
+              },
+              "preStop": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "dependsOn": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "initTask": {
+            "default": false,
+            "type": "boolean"
+          },
+          "readinessProbe": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "type",
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "extraCompose": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "initTaskServices": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "file"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "hooks": {
+      "type": "object",
+      "properties": {
+        "postInfrastructure": {
+          "type": "string"
+        },
+        "postSetup": {
+          "type": "string"
+        },
+        "preStop": {
+          "type": "string"
+        }
+      },
       "additionalProperties": false
     }
-  }
+  },
+  "required": [
+    "version",
+    "name",
+    "services"
+  ],
+  "additionalProperties": false,
+  "$id": "https://lo1.dev/schemas/lo1.v1.schema.json"
 }
