@@ -294,6 +294,8 @@ type ParsedComposeService = {
   env_file?: string | string[];
   environment?: string[] | Record<string, string | number | boolean | null>;
   extra_hosts?: ExtraHosts;
+  network_mode?: string;
+  networks?: string[] | Record<string, unknown>;
 };
 
 type ParsedComposeDoc = {
@@ -355,6 +357,25 @@ function injectLo1Environment(svc: ParsedComposeService, lo1Env: Record<string, 
 }
 
 /**
+ * Puts a compose-file service on the workspace network, where the names in
+ * lo1's discovery variables resolve and the proxy can reach it. Networks the
+ * file lists are kept; with none listed the service also stays on `default`,
+ * so siblings in its own file still reach it. `network_mode` is left alone,
+ * since Compose doesn't allow it alongside `networks`.
+ */
+export function joinWorkspaceNetwork(svc: ParsedComposeService, netId: string): void {
+  if (svc.network_mode !== undefined) return;
+  const networks = svc.networks;
+  if (networks === undefined) {
+    svc.networks = ["default", netId];
+  } else if (Array.isArray(networks)) {
+    if (!networks.includes(netId)) svc.networks = [...networks, netId];
+  } else if (!(netId in networks)) {
+    svc.networks = { ...networks, [netId]: null };
+  }
+}
+
+/**
  * Reads per-service compose files, resolves all relative paths to absolute
  * based on each service's directory, and writes resolved copies to .lo1/.
  * This ensures Docker Compose path resolution works correctly regardless
@@ -382,7 +403,10 @@ export async function preprocessServiceComposeFiles(
     }
 
     const lo1Service = doc.services?.[name];
-    if (lo1Service) injectLo1Environment(lo1Service, envFor(name, service));
+    if (lo1Service) {
+      injectLo1Environment(lo1Service, envFor(name, service));
+      joinWorkspaceNetwork(lo1Service, networkId(config.name));
+    }
 
     const resolvedYaml = toYaml(doc, { noRefs: true, lineWidth: -1 });
     await writeFile(join(lo1Dir, `${name}.compose.yaml`), resolvedYaml, "utf-8");

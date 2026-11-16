@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { load as parseYaml, dump as toYaml } from "js-yaml";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { WorkspaceConfig, ComposeContribution } from "@lo1/sdk";
@@ -13,6 +13,8 @@ import {
   networkId,
   proxyServiceId,
   withHostGateway,
+  joinWorkspaceNetwork,
+  preprocessServiceComposeFiles,
 } from "../../src/compose/generate";
 
 function makeConfig(
@@ -471,5 +473,63 @@ describe("withHostGateway", () => {
   it("changes nothing outside Linux", () => {
     expect(withHostGateway(undefined, "darwin")).toBeUndefined();
     expect(withHostGateway(["db.local:10.0.0.5"], "win32")).toEqual(["db.local:10.0.0.5"]);
+  });
+});
+
+describe("joinWorkspaceNetwork", () => {
+  const net = "lo1-test-ws-network";
+
+  it("keeps a service with no networks on default and adds the workspace network", () => {
+    const svc: Parameters<typeof joinWorkspaceNetwork>[0] = {};
+    joinWorkspaceNetwork(svc, net);
+    expect(svc.networks).toEqual(["default", net]);
+  });
+
+  it("appends to a list of networks the file declares", () => {
+    const svc = { networks: ["backend"] };
+    joinWorkspaceNetwork(svc, net);
+    expect(svc.networks).toEqual(["backend", net]);
+  });
+
+  it("adds to a map of networks and keeps their settings", () => {
+    const svc = { networks: { backend: { aliases: ["web"] } } };
+    joinWorkspaceNetwork(svc, net);
+    expect(svc.networks).toEqual({ backend: { aliases: ["web"] }, [net]: null });
+  });
+
+  it("changes nothing when the service is already on the workspace network", () => {
+    const svc = { networks: { [net]: { aliases: ["web"] } } };
+    joinWorkspaceNetwork(svc, net);
+    expect(svc.networks).toEqual({ [net]: { aliases: ["web"] } });
+  });
+
+  it("leaves a service that sets network_mode alone", () => {
+    const svc: Parameters<typeof joinWorkspaceNetwork>[0] = { network_mode: "host" };
+    joinWorkspaceNetwork(svc, net);
+    expect(svc.networks).toBeUndefined();
+  });
+});
+
+describe("preprocessServiceComposeFiles", () => {
+  it("puts the lo1 service on the workspace network and gives it discovery env", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lo1-preprocess-"));
+    const webDir = join(dir, "web");
+    await mkdir(webDir);
+    await writeFile(
+      join(webDir, "compose.yaml"),
+      toYaml({ services: { web: { build: { context: "." } }, cache: { image: "redis:8" } } }),
+    );
+    const config = makeConfig({
+      web: { path: webDir, mode: "container", compose: "compose.yaml" },
+      api: { mode: "container", containerImage: "api:dev", port: 4100 },
+    });
+
+    await preprocessServiceComposeFiles(config, dir);
+
+    const doc = parseResult(await readFile(join(dir, ".lo1", "web.compose.yaml"), "utf-8"));
+    expect(doc.services.web.networks).toEqual(["default", networkId("test-ws")]);
+    expect(doc.services.web.environment.LO1_SERVICE_API_URL).toBe("http://api:4100");
+    expect(doc.services.cache.networks).toBeUndefined();
+    await rm(dir, { recursive: true, force: true });
   });
 });
