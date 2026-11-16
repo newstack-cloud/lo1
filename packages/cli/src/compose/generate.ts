@@ -112,9 +112,35 @@ export function containerEnvBuilder(
     buildServiceEnv(name, service, config, registry, pluginEnvVars, "container");
 }
 
+const GATEWAY_HOST = "host.docker.internal";
+
 /** Docker Engine on Linux has no host.docker.internal unless it is mapped. */
 function hostGatewayEntries(): string[] | undefined {
-  return platform() === "linux" ? ["host.docker.internal:host-gateway"] : undefined;
+  return platform() === "linux" ? [`${GATEWAY_HOST}:host-gateway`] : undefined;
+}
+
+type ExtraHosts = string[] | Record<string, string | string[]>;
+
+function mapsGatewayHost(extraHosts: ExtraHosts): boolean {
+  if (!Array.isArray(extraHosts)) return GATEWAY_HOST in extraHosts;
+  // List entries are "host:ip" or "host=ip".
+  return extraHosts.some((entry) => entry.split(/[:=]/)[0].trim() === GATEWAY_HOST);
+}
+
+/**
+ * Adds lo1's host-gateway mapping to a compose service's extra_hosts on Linux,
+ * keeping the entries already there. A mapping of host.docker.internal the
+ * compose file declares itself is left alone.
+ */
+export function withHostGateway(
+  extraHosts: ExtraHosts | undefined,
+  os: NodeJS.Platform = platform(),
+): ExtraHosts | undefined {
+  if (os !== "linux") return extraHosts;
+  if (extraHosts === undefined) return [`${GATEWAY_HOST}:host-gateway`];
+  if (mapsGatewayHost(extraHosts)) return extraHosts;
+  if (Array.isArray(extraHosts)) return [...extraHosts, `${GATEWAY_HOST}:host-gateway`];
+  return { ...extraHosts, [GATEWAY_HOST]: "host-gateway" };
 }
 
 function addContainerServices(
@@ -267,7 +293,7 @@ type ParsedComposeService = {
   volumes?: (string | Record<string, unknown>)[];
   env_file?: string | string[];
   environment?: string[] | Record<string, string | number | boolean | null>;
-  extra_hosts?: string[] | Record<string, string>;
+  extra_hosts?: ExtraHosts;
 };
 
 type ParsedComposeDoc = {
@@ -324,8 +350,8 @@ function injectLo1Environment(svc: ParsedComposeService, lo1Env: Record<string, 
     svc.environment = { ...lo1Env, ...own };
   }
 
-  const extraHosts = hostGatewayEntries();
-  if (extraHosts && svc.extra_hosts === undefined) svc.extra_hosts = extraHosts;
+  const extraHosts = withHostGateway(svc.extra_hosts);
+  if (extraHosts) svc.extra_hosts = extraHosts;
 }
 
 /**

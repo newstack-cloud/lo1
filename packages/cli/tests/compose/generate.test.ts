@@ -12,6 +12,7 @@ import {
   ComposeError,
   networkId,
   proxyServiceId,
+  withHostGateway,
 } from "../../src/compose/generate";
 
 function makeConfig(
@@ -374,10 +375,7 @@ describe("extraComposeInitTasks", () => {
   });
 
   it("should return empty array when object form has no initTaskServices", () => {
-    const config = makeConfig(
-      {},
-      { extraCompose: { file: "./infra.compose.yaml" } },
-    );
+    const config = makeConfig({}, { extraCompose: { file: "./infra.compose.yaml" } });
     expect(extraComposeInitTasks(config)).toEqual([]);
   });
 
@@ -440,5 +438,38 @@ describe("generateCompose proxy TLS", () => {
 
     expect(proxy.build).toBeUndefined();
     expect(proxy.image).toBe("ghcr.io/me/caddy:1");
+  });
+});
+
+describe("withHostGateway", () => {
+  const gateway = "host.docker.internal:host-gateway";
+
+  it("adds the mapping on Linux when there are no extra_hosts", () => {
+    expect(withHostGateway(undefined, "linux")).toEqual([gateway]);
+  });
+
+  it("keeps unrelated list entries and appends the mapping", () => {
+    expect(withHostGateway(["db.local:10.0.0.5"], "linux")).toEqual(["db.local:10.0.0.5", gateway]);
+  });
+
+  it("keeps unrelated map entries and adds the mapping", () => {
+    expect(withHostGateway({ "db.local": "10.0.0.5" }, "linux")).toEqual({
+      "db.local": "10.0.0.5",
+      "host.docker.internal": "host-gateway",
+    });
+  });
+
+  it("leaves a mapping of host.docker.internal the file declares alone", () => {
+    expect(withHostGateway(["host.docker.internal=172.17.0.1"], "linux")).toEqual([
+      "host.docker.internal=172.17.0.1",
+    ]);
+    expect(withHostGateway({ "host.docker.internal": "172.17.0.1" }, "linux")).toEqual({
+      "host.docker.internal": "172.17.0.1",
+    });
+  });
+
+  it("changes nothing outside Linux", () => {
+    expect(withHostGateway(undefined, "darwin")).toBeUndefined();
+    expect(withHostGateway(["db.local:10.0.0.5"], "win32")).toEqual(["db.local:10.0.0.5"]);
   });
 });
