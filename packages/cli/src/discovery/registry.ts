@@ -54,7 +54,8 @@ export const HOST_GATEWAY = "host.docker.internal";
 /**
  * How a container reaches an endpoint: by service name on the compose network
  * when the target is itself a container, or through the host gateway when the
- * target is a dev-mode process on the host.
+ * target is in dev mode. A dev-mode service is either a process on the host or
+ * a plugin's container, which publishes its port on the host for this reason.
  */
 export function containerFacingUrl(endpoint: ServiceEndpoint): string {
   if (endpoint.mode === "dev") return `http://${HOST_GATEWAY}:${endpoint.hostPort}`;
