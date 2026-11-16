@@ -67,14 +67,8 @@ function hydrateHandle(
       type: "process",
       pid: svc.pid,
       running: true,
-      async stop() {
-        if (svc.pid) {
-          try {
-            signalProcessTree(svc.pid, "SIGTERM");
-          } catch {
-            // Process may have already exited
-          }
-        }
+      async stop(timeoutMs = 5000) {
+        if (svc.pid) await stopProcessByPid(svc.pid, timeoutMs);
       },
     };
   }
@@ -111,6 +105,52 @@ function hydrateHandle(
   };
 }
 
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function trySignal(pid: number, signal: NodeJS.Signals): void {
+  try {
+    signalProcessTree(pid, signal);
+  } catch {
+    // Process may have already exited
+  }
+}
+
+/**
+ * Stops a process lo1 did not spawn in this run, waiting for it to exit so
+ * its port is free again, and killing it if it outlasts the timeout.
+ */
+async function stopProcessByPid(pid: number, timeoutMs: number): Promise<void> {
+  trySignal(pid, "SIGTERM");
+
+  const deadline = Date.now() + timeoutMs;
+  while (isAlive(pid) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  if (isAlive(pid)) trySignal(pid, "SIGKILL");
+}
+
+/**
+ * Processes recorded in the state file that the caller holds no handle for,
+ * such as a service `lo1 restart` started while `lo1 up` was in the foreground.
+ */
+function untrackedProcessHandles(
+  state: WorkspaceState,
+  known: ServiceHandle[],
+  exec: StopDeps["exec"],
+): ServiceHandle[] {
+  const knownPids = new Set(known.map((h) => h.pid).filter((pid) => pid !== undefined));
+  return hydrateHandles(state, exec).filter(
+    (h) => h.type === "process" && h.pid !== undefined && !knownPids.has(h.pid),
+  );
+}
+
 export async function stopWorkspace(
   options: StopOptions,
   overrides: Partial<StopDeps> = {},
@@ -144,19 +184,23 @@ export async function stopWorkspace(
     });
   }
 
-  const handles = options.handles ?? hydrateHandles(state, deps.exec);
+  const handles = options.handles
+    ? [...options.handles, ...untrackedProcessHandles(state, options.handles, deps.exec)]
+    : hydrateHandles(state, deps.exec);
   debug("stopWorkspace: %d handles to stop", handles.length);
 
   if (handles.length > 0) {
     emit({ kind: "phase", phase: "Stopping services" });
     for (const handle of handles) {
+      // Finished init tasks and replaced processes have nothing left to stop.
+      if (handle.type === "process" && !handle.running) continue;
       emit({ kind: "service", service: handle.serviceName, status: "stopping" });
       if (config && handle.running) {
         await runServicePreStop({
           handle,
           config,
           workspaceDir,
-          deps,
+          executeHook: deps.executeHook,
           emit,
           signal: options.signal,
         });
@@ -181,11 +225,11 @@ export async function stopWorkspace(
   emit({ kind: "phase", phase: "Stopped" });
 }
 
-type ServicePreStopContext = {
+export type ServicePreStopContext = {
   handle: ServiceHandle;
   config: WorkspaceConfig;
   workspaceDir: string;
-  deps: StopDeps;
+  executeHook: OrchestratorDeps["executeHook"];
   emit: (event: OrchestratorEvent) => void;
   signal?: AbortSignal;
 };
@@ -194,7 +238,7 @@ type ServicePreStopContext = {
  * Runs a service's preStop hook with the same environment its other hooks get.
  * A failing hook is reported but does not stop the rest of the teardown.
  */
-async function runServicePreStop(ctx: ServicePreStopContext): Promise<void> {
+export async function runServicePreStop(ctx: ServicePreStopContext): Promise<void> {
   const name = ctx.handle.serviceName;
   const service = ctx.config.services[name];
   const command = service?.hooks?.preStop;
@@ -205,7 +249,7 @@ async function runServicePreStop(ctx: ServicePreStopContext): Promise<void> {
   const env = buildServiceEnv(name, service, ctx.config, registry, {}, consumerMode);
 
   try {
-    await ctx.deps.executeHook(`${name}:preStop`, command, {
+    await ctx.executeHook(`${name}:preStop`, command, {
       cwd: resolve(ctx.workspaceDir, service.path),
       env,
       signal: ctx.signal,

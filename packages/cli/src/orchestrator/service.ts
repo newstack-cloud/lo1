@@ -61,6 +61,8 @@ export type StartServiceOptions = {
   compose?: ComposeContext;
   /** Host processes write straight to their log file so they can outlive lo1. */
   detached?: boolean;
+  /** Replace the service's existing container rather than reusing it (restarts). */
+  recreate?: boolean;
   signal?: AbortSignal;
   onOutput?: (line: OutputLine) => void;
   onHookOutput?: (output: HookOutput) => void;
@@ -342,11 +344,7 @@ async function startWithCompose(
   }
 
   const services = [serviceName];
-  // Without --no-deps, compose would also start whatever the service's
-  // depends_on names, re-running lo1 services such as an init task that has
-  // already completed. Helpers from the service's own compose file still start.
-  const helpers = await deps.findComposeHelpers(options.config, options.workspaceDir, serviceName);
-  await deps.composeUp({ ...compose, services: [...services, ...helpers], noDeps: true, signal });
+  await composeUpWithHelpers(options, compose, deps);
 
   const logs = deps.composeLogs({ ...compose, services }, (line) =>
     options.onOutput?.({
@@ -377,4 +375,35 @@ async function startWithCompose(
     stop: async () => logs.kill(),
     releaseLogs: () => logs.kill(),
   };
+}
+
+/**
+ * Brings up a compose-run service with --no-deps, which keeps compose from
+ * also starting whatever its depends_on names and so re-running lo1 services
+ * such as an init task that has already completed. Helpers from the service's
+ * own compose file are started alongside it instead.
+ */
+async function composeUpWithHelpers(
+  options: StartServiceOptions,
+  compose: ComposeContext,
+  deps: StartServiceDeps,
+): Promise<void> {
+  const { serviceName, signal } = options;
+  const services = [serviceName];
+  const helpers = await deps.findComposeHelpers(options.config, options.workspaceDir, serviceName);
+
+  if (options.recreate && helpers.length > 0) {
+    // A restart replaces the service's container, not its helpers'.
+    await deps.composeUp({ ...compose, services: helpers, noDeps: true, signal });
+    await deps.composeUp({ ...compose, services, noDeps: true, signal, forceRecreate: true });
+    return;
+  }
+
+  await deps.composeUp({
+    ...compose,
+    services: [...services, ...helpers],
+    noDeps: true,
+    signal,
+    forceRecreate: options.recreate,
+  });
 }

@@ -215,6 +215,27 @@ describe("startService", () => {
     expect(waitOpts.waitForExit).toEqual([]);
   });
 
+  it("should recreate only the service, not its helpers, when restarting", async () => {
+    const config = makeConfig({
+      web: { mode: "container", compose: "compose.yaml" },
+    });
+    const deps = makeDeps({ findComposeHelpers: mock(() => Promise.resolve(["cache"])) });
+    const options = makeOptions({
+      serviceName: "web",
+      serviceConfig: config.services.web,
+      config,
+      recreate: true,
+    });
+
+    await startService(options, deps);
+
+    const calls = (deps.composeUp as ReturnType<typeof mock>).mock.calls.map((c) => c[0]);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toMatchObject({ services: ["cache"], noDeps: true });
+    expect(calls[0].forceRecreate).toBeUndefined();
+    expect(calls[1]).toMatchObject({ services: ["web"], noDeps: true, forceRecreate: true });
+  });
+
   it("should start a compose service's own helpers but wait only on the service", async () => {
     const config = makeConfig({
       web: { mode: "container", compose: "compose.yaml" },

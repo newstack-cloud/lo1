@@ -1,5 +1,8 @@
 import { describe, it, expect, mock } from "bun:test";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { platform, tmpdir } from "node:os";
+import { startProcess } from "../../src/runner/process";
 import { stopWorkspace, hydrateHandles, type StopDeps } from "../../src/orchestrator/stop";
 import type { ServiceHandle } from "../../src/orchestrator/service";
 import type { WorkspaceState, OrchestratorEvent } from "../../src/orchestrator/types";
@@ -109,6 +112,7 @@ describe("stopWorkspace", () => {
     const handle: ServiceHandle = {
       serviceName: "web",
       type: "process",
+      pid: 12345,
       running: true,
       stop: mock(async () => {
         calls.push("stop:web");
@@ -144,7 +148,13 @@ describe("stopWorkspace", () => {
       executeHook: mock(() => Promise.reject(new Error("exit 1"))),
     });
     const stop = mock(() => Promise.resolve());
-    const handle: ServiceHandle = { serviceName: "web", type: "process", running: true, stop };
+    const handle: ServiceHandle = {
+      serviceName: "web",
+      type: "process",
+      pid: 12345,
+      running: true,
+      stop,
+    };
     const events: OrchestratorEvent[] = [];
 
     await stopWorkspace(
@@ -158,6 +168,55 @@ describe("stopWorkspace", () => {
       kind: "error",
       message: 'preStop hook for "web" failed: exit 1',
     });
+  });
+
+  it("should also stop processes in the state file that it holds no handle for", async () => {
+    const killCalls: number[] = [];
+    const originalKill = process.kill;
+    process.kill = ((pid: number, signal?: string | number) => {
+      if (signal === 0) throw new Error("ESRCH");
+      killCalls.push(pid);
+      return true;
+    }) as typeof process.kill;
+
+    try {
+      const tracked: ServiceHandle = {
+        serviceName: "api",
+        type: "process",
+        pid: 999,
+        running: true,
+        stop: mock(() => Promise.resolve()),
+      };
+      await stopWorkspace({ workspaceDir: "/workspace", handles: [tracked] }, makeDeps());
+
+      expect(tracked.stop).toHaveBeenCalled();
+      expect(killCalls.some((pid) => Math.abs(pid) === 12345)).toBe(true);
+    } finally {
+      process.kill = originalKill;
+    }
+  });
+
+  it("should skip process handles that have already exited", async () => {
+    const finished: ServiceHandle = {
+      serviceName: "migrate",
+      type: "process",
+      pid: 777,
+      running: false,
+      stop: mock(() => Promise.resolve()),
+    };
+    const events: OrchestratorEvent[] = [];
+
+    await stopWorkspace(
+      {
+        workspaceDir: "/workspace",
+        handles: [finished],
+        onEvent: (e) => events.push(e),
+      },
+      makeDeps({ readState: mock(() => Promise.resolve({ ...sampleState, services: {} })) }),
+    );
+
+    expect(finished.stop).not.toHaveBeenCalled();
+    expect(events.some((e) => e.kind === "service" && e.service === "migrate")).toBe(false);
   });
 
   it("should stop container services using containerId from state", async () => {
@@ -183,6 +242,8 @@ describe("stopWorkspace", () => {
     const killCalls: [number, string | number][] = [];
     const originalKill = process.kill;
     process.kill = ((pid: number, signal?: string | number) => {
+      // Signal 0 is the liveness check: report the process gone once signalled.
+      if (signal === 0) throw new Error("ESRCH");
       killCalls.push([pid, signal ?? "SIGTERM"]);
       return true;
     }) as typeof process.kill;
@@ -281,6 +342,8 @@ describe("hydrateHandles", () => {
     const killCalls: [number, string | number][] = [];
     const originalKill = process.kill;
     process.kill = ((pid: number, signal?: string | number) => {
+      // Signal 0 is the liveness check: report the process gone once signalled.
+      if (signal === 0) throw new Error("ESRCH");
       killCalls.push([pid, signal ?? "SIGTERM"]);
       return true;
     }) as typeof process.kill;
@@ -295,5 +358,52 @@ describe("hydrateHandles", () => {
     } finally {
       process.kill = originalKill;
     }
+  });
+
+  describe("with real processes", () => {
+    function isAlive(pid: number): boolean {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    async function startDetached(command: string) {
+      const dir = await mkdtemp(join(tmpdir(), "lo1-stop-"));
+      const proc = startProcess({
+        serviceName: "web",
+        command,
+        cwd: dir,
+        env: {},
+        logFile: join(dir, "web.log"),
+      });
+      await new Promise((r) => setTimeout(r, 200));
+      const state: WorkspaceState = {
+        ...sampleState,
+        services: { web: { runner: "process", pid: proc.pid } },
+      };
+      return { dir, pid: proc.pid!, handle: hydrateHandles(state)[0] };
+    }
+
+    it.skipIf(platform() === "win32")("should wait for the process to exit", async () => {
+      const { dir, pid, handle } = await startDetached("sleep 30");
+
+      await handle.stop(2000);
+
+      expect(isAlive(pid)).toBe(false);
+      await rm(dir, { recursive: true, force: true });
+    });
+
+    it.skipIf(platform() === "win32")("should kill a process that ignores SIGTERM", async () => {
+      const { dir, pid, handle } = await startDetached("trap '' TERM; while true; do sleep 0.1; done");
+
+      await handle.stop(300);
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(isAlive(pid)).toBe(false);
+      await rm(dir, { recursive: true, force: true });
+    });
   });
 });

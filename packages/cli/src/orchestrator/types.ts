@@ -12,7 +12,7 @@ import type {
   ComposeLogLine,
   ComposeLogsHandle,
 } from "../runner/compose";
-import type { ServiceHandle, StartServiceOptions } from "./service";
+import type { ComposeContext, ServiceHandle, StartServiceOptions } from "./service";
 import type { PortClaim } from "../doctor/ports";
 
 export type ServiceStatus = "starting" | "started" | "completed" | "stopping" | "stopped";
@@ -90,6 +90,11 @@ export type StartResult = {
   /** Handle for the long-running `docker compose logs -f` process.
    *  Caller should kill it during shutdown. */
   logsHandle: { kill: () => void };
+  /** What a later restart of a service needs to start it the same way. */
+  plugins: Map<string, Plugin>;
+  registry: EndpointRegistry;
+  pluginEnvVars: Record<string, string>;
+  compose: ComposeContext;
 };
 
 export type StopOptions = {
@@ -115,4 +120,8 @@ export type WorkspaceState = {
   fileArgs: string[];
   workspaceDir: string;
   services: Record<string, ServiceState>;
+  /** Plugin env vars the services were started with, so a restart can reuse them. */
+  pluginEnvVars?: Record<string, string>;
+  /** The `lo1 up --mode` override, so a restart runs the service the same way. */
+  modeOverride?: "dev" | "container";
 };

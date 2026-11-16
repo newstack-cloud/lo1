@@ -47,6 +47,10 @@ export interface Plugin {
   /**
    * Sets up file watchers that trigger rebuilds/restarts.
    * Returns an async iterable that yields restart signals. Optional.
+   *
+   * lo1 follows it while `lo1 up` runs in the foreground (not with --detach),
+   * restarting the service on each signal and logging `signal.reason`. It
+   * calls the iterator's `return()` on shutdown, so release watchers there.
    */
   watchForChanges?(input: WatchInput): AsyncIterable<RestartSignal>;
 }
