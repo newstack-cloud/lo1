@@ -532,4 +532,63 @@ describe("preprocessServiceComposeFiles", () => {
     expect(doc.services.cache.networks).toBeUndefined();
     await rm(dir, { recursive: true, force: true });
   });
+
+  it("resolves relative host paths against the service directory", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lo1-preprocess-"));
+    const webDir = join(dir, "web");
+    await mkdir(webDir);
+    await writeFile(
+      join(webDir, "compose.yaml"),
+      toYaml({
+        services: {
+          web: {
+            build: { context: "." },
+            volumes: ["./src:/app/src", "node_modules_cache:/app/node_modules", "/app/tmp"],
+            env_file: [".env", "/etc/lo1/shared.env"],
+          },
+        },
+      }),
+    );
+    const config = makeConfig({
+      web: { path: webDir, mode: "container", compose: "compose.yaml" },
+    });
+
+    await preprocessServiceComposeFiles(config, dir);
+
+    const doc = parseResult(await readFile(join(dir, ".lo1", "web.compose.yaml"), "utf-8"));
+    expect(doc.services.web.build.context).toBe(webDir);
+    expect(doc.services.web.volumes).toEqual([
+      `${join(webDir, "src")}:/app/src`,
+      "node_modules_cache:/app/node_modules",
+      "/app/tmp",
+    ]);
+    expect(doc.services.web.env_file).toEqual([join(webDir, ".env"), "/etc/lo1/shared.env"]);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("adds lo1's variables to a list-form environment without overriding the file's", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lo1-preprocess-"));
+    const webDir = join(dir, "web");
+    await mkdir(webDir);
+    await writeFile(
+      join(webDir, "compose.yaml"),
+      toYaml({
+        services: { web: { image: "web:dev", environment: ["LO1_SERVICE_API_URL=http://x"] } },
+      }),
+    );
+    const config = makeConfig({
+      web: { path: webDir, mode: "container", compose: "compose.yaml", env: { DEBUG: "1" } },
+      api: { mode: "container", containerImage: "api:dev", port: 4100 },
+    });
+
+    await preprocessServiceComposeFiles(config, dir);
+
+    const doc = parseResult(await readFile(join(dir, ".lo1", "web.compose.yaml"), "utf-8"));
+    const env: string[] = doc.services.web.environment;
+    expect(env).toContain("LO1_SERVICE_API_URL=http://x");
+    expect(env).not.toContain("LO1_SERVICE_API_URL=http://api:4100");
+    expect(env).toContain("DEBUG=1");
+    expect(env).toContain("LO1_SERVICE_NAME=web");
+    await rm(dir, { recursive: true, force: true });
+  });
 });
