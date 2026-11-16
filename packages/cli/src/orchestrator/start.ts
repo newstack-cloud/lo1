@@ -35,7 +35,7 @@ import type {
   OrchestratorEvent,
   ServiceState,
 } from "./types";
-import type { ServiceHandle } from "./service";
+import type { ComposeContext, ServiceHandle } from "./service";
 
 export class OrchestratorError extends Lo1Error {
   constructor(message: string) {
@@ -67,6 +67,7 @@ type LayerStartContext = {
   registry: EndpointRegistry;
   pluginEnvVars: Record<string, string>;
   workspaceDir: string;
+  compose: ComposeContext;
   signal?: AbortSignal;
   deps: OrchestratorDeps;
   emit: (event: OrchestratorEvent) => void;
@@ -108,7 +109,7 @@ type PrepareResult = {
   registry: EndpointRegistry;
   plugins: Map<string, Plugin>;
   composeResult: ReturnType<OrchestratorDeps["generateCompose"]>;
-  initTaskServices: string[];
+  infraInitTasks: string[];
   caddyResult: CaddyfileResult;
 };
 
@@ -124,7 +125,7 @@ export async function startWorkspace(
   await cleanupStaleWorkspace(deps, workspaceDir, emit);
 
   const prepared = await prepareWorkspaceConfig(deps, options, workspaceDir, emit);
-  const { config, dag, registry, plugins, composeResult, initTaskServices, caddyResult } = prepared;
+  const { config, dag, registry, plugins, composeResult, infraInitTasks, caddyResult } = prepared;
 
   checkAborted(options.signal);
 
@@ -139,10 +140,10 @@ export async function startWorkspace(
   await deps.writeState(baseState, workspaceDir);
 
   debug("startWorkspace: starting compose phases");
-  const logsHandle = await startComposePhases(
+  const infraLogs = await startInfrastructure(
     deps,
     composeResult,
-    initTaskServices,
+    infraInitTasks,
     workspaceDir,
     options,
     emit,
@@ -177,6 +178,11 @@ export async function startWorkspace(
 
   debug("startWorkspace: starting services");
   emit({ kind: "phase", phase: "Starting services" });
+  const composeContext: ComposeContext = {
+    projectName: composeResult.projectName,
+    fileArgs: composeResult.fileArgs,
+    cwd: workspaceDir,
+  };
   const handles = await startServicesInLayers({
     layers: dag.layers,
     config,
@@ -184,6 +190,7 @@ export async function startWorkspace(
     registry,
     pluginEnvVars: composeResult.pluginEnvVars,
     workspaceDir,
+    compose: composeContext,
     signal: options.signal,
     deps,
     emit,
@@ -198,8 +205,13 @@ export async function startWorkspace(
     fileArgs: composeResult.fileArgs,
     cwd: workspaceDir,
   };
-  const noopHandle = { kill: () => {} };
-  return { handles, composeOptions, config, logsHandle: logsHandle ?? noopHandle };
+  const logsHandle = {
+    kill: () => {
+      infraLogs?.kill();
+      for (const handle of handles) handle.releaseLogs?.();
+    },
+  };
+  return { handles, composeOptions, config, logsHandle };
 }
 
 async function cleanupStaleWorkspace(
@@ -254,15 +266,10 @@ async function prepareWorkspaceConfig(
   await prepareTls(deps, config, workspaceDir);
   const composeResult = deps.generateCompose(config, contributions);
   await deps.writeComposeFile(composeResult.yaml, workspaceDir);
-  await preprocessServiceComposeFiles(config, workspaceDir);
+  await preprocessServiceComposeFiles(config, workspaceDir, composeResult.pluginEnvVars);
 
   const ecFile = extraComposeFile(config);
-  const initTaskServices = [
-    ...extraComposeInitTasks(config),
-    ...Object.entries(config.services)
-      .filter(([, svc]) => svc.initTask)
-      .map(([name]) => name),
-  ];
+  const infraInitTasks = extraComposeInitTasks(config);
   if (ecFile) {
     const extraServices = await deps.discoverExtraComposeServices(ecFile, workspaceDir);
     composeResult.infraServices.push(...extraServices);
@@ -274,7 +281,7 @@ async function prepareWorkspaceConfig(
   const hostsBlock = deps.generateHostsBlock(caddyResult.domains);
   if (hostsBlock) await deps.applyHosts(hostsBlock);
 
-  return { config, dag, registry, plugins, composeResult, initTaskServices, caddyResult };
+  return { config, dag, registry, plugins, composeResult, infraInitTasks, caddyResult };
 }
 
 /**
@@ -293,10 +300,15 @@ async function prepareTls(
   await deps.writeProxyDockerfile(config, workspaceDir);
 }
 
-async function startComposePhases(
+/**
+ * Starts the infrastructure layer: plugin contributions, the proxy and the
+ * extraCompose services. lo1 services that run through compose are started
+ * later, in their dependency layer.
+ */
+async function startInfrastructure(
   deps: OrchestratorDeps,
   composeResult: PrepareResult["composeResult"],
-  initTaskServices: string[],
+  infraInitTasks: string[],
   workspaceDir: string,
   options: StartOptions,
   emit: (event: OrchestratorEvent) => void,
@@ -326,39 +338,24 @@ async function startComposePhases(
       line: { service: line.service, stream: line.stream, text: line.text, timestamp: new Date() },
     });
 
-  let logsHandle: { kill: () => void } | undefined;
+  const infraServices = composeResult.infraServices;
+  if (infraServices.length === 0) return undefined;
+
+  emit({ kind: "phase", phase: "Starting infrastructure" });
+  await deps.composeUp({ ...composeOptions, services: infraServices });
+  const logsHandle = deps.composeLogs({ ...composeOptions, services: infraServices }, emitLogLine);
 
   try {
-    if (composeResult.infraServices.length > 0) {
-      emit({ kind: "phase", phase: "Starting infrastructure" });
-      await deps.composeUp({ ...composeOptions, services: composeResult.infraServices });
-      logsHandle = deps.composeLogs(composeOptions, emitLogLine);
-      await deps.composeWait({
-        projectName: composeResult.projectName,
-        fileArgs: composeResult.fileArgs,
-        services: composeResult.infraServices,
-        cwd: workspaceDir,
-        signal: options.signal,
-        waitForExit: initTaskServices,
-      });
-    }
-
-    if (composeResult.appServices.length > 0) {
-      emit({ kind: "phase", phase: "Starting compose services" });
-      await deps.composeUp({ ...composeOptions, services: composeResult.appServices });
-      if (!logsHandle) logsHandle = deps.composeLogs(composeOptions, emitLogLine);
-      const appInitTasks = initTaskServices.filter((s) => composeResult.appServices.includes(s));
-      await deps.composeWait({
-        projectName: composeResult.projectName,
-        fileArgs: composeResult.fileArgs,
-        services: composeResult.appServices,
-        cwd: workspaceDir,
-        signal: options.signal,
-        waitForExit: appInitTasks,
-      });
-    }
+    await deps.composeWait({
+      projectName: composeResult.projectName,
+      fileArgs: composeResult.fileArgs,
+      services: infraServices,
+      cwd: workspaceDir,
+      signal: options.signal,
+      waitForExit: infraInitTasks,
+    });
   } catch (err) {
-    logsHandle?.kill();
+    logsHandle.kill();
     throw err;
   }
 
@@ -425,6 +422,8 @@ async function collectContributions(
 function buildServiceState(handles: ServiceHandle[]): Record<string, ServiceState> {
   const services: Record<string, ServiceState> = {};
   for (const h of handles) {
+    // A finished init task has nothing left to stop, and its pid may be reused.
+    if (h.type === "process" && !h.running) continue;
     services[h.serviceName] = {
       runner: h.type,
       ...(h.pid !== undefined && { pid: h.pid }),
@@ -523,20 +522,23 @@ async function startServicesInLayers(ctx: LayerStartContext): Promise<ServiceHan
       const layerPromises = layer
         .filter((name) => ctx.config.services[name].mode !== "skip")
         .map(async (name) => {
+          const serviceConfig = ctx.config.services[name];
           ctx.emit({ kind: "service", service: name, status: "starting" });
           const handle = await ctx.deps.startService({
             serviceName: name,
-            serviceConfig: ctx.config.services[name],
+            serviceConfig,
             config: ctx.config,
-            plugin: ctx.plugins.get(ctx.config.services[name].type),
+            plugin: ctx.plugins.get(serviceConfig.type),
             registry: ctx.registry,
             pluginEnvVars: ctx.pluginEnvVars,
             workspaceDir: ctx.workspaceDir,
+            compose: ctx.compose,
             signal: ctx.signal,
             onOutput: (line) => ctx.emit({ kind: "output", line }),
             onHookOutput: (output) => ctx.emit({ kind: "hook", hook: name, output }),
           });
-          ctx.emit({ kind: "service", service: name, status: "started" });
+          const status = serviceConfig.initTask ? "completed" : "started";
+          ctx.emit({ kind: "service", service: name, status });
           return handle;
         });
 

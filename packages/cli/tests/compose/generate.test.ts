@@ -214,6 +214,36 @@ describe("generateCompose", () => {
     expect(doc.services.api.environment.DB_HOST).toBe("localhost");
   });
 
+  it("should give container-mode services discovery env for the rest of the workspace", () => {
+    const config = makeConfig({
+      api: { mode: "container", containerImage: "api:1", port: 3000 },
+      web: { mode: "dev", command: "vite", port: 5173, hostPort: 15173 },
+    });
+
+    const doc = parseResult(generateCompose(config).yaml);
+    const env = doc.services.api.environment;
+
+    expect(env.LO1_SERVICE_API_URL).toBe("http://api:3000");
+    expect(env.LO1_SERVICE_WEB_URL).toBe("http://host.docker.internal:15173");
+    expect(env.LO1_SERVICE_NAME).toBe("api");
+    expect(env.LO1_WORKSPACE_NAME).toBe("test-ws");
+  });
+
+  it("should let a service's own env override discovery env", () => {
+    const config = makeConfig({
+      api: {
+        mode: "container",
+        containerImage: "api:1",
+        port: 3000,
+        env: { LO1_SERVICE_API_URL: "http://custom:1" },
+      },
+    });
+
+    const doc = parseResult(generateCompose(config).yaml);
+
+    expect(doc.services.api.environment.LO1_SERVICE_API_URL).toBe("http://custom:1");
+  });
+
   it("should categorize proxy as infra service", () => {
     const config = makeConfig({
       api: { mode: "container", containerImage: "api:1", port: 3000 },

@@ -2,7 +2,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve, isAbsolute } from "node:path";
 import { platform } from "node:os";
 import { dump as toYaml, load as parseYaml } from "js-yaml";
-import type { WorkspaceConfig, ComposeContribution, ComposeServiceDef } from "@lo1/sdk";
+import type {
+  WorkspaceConfig,
+  ComposeContribution,
+  ComposeServiceDef,
+  ServiceConfig,
+} from "@lo1/sdk";
+import { buildEndpointRegistry, buildServiceEnv } from "../discovery/registry";
 import { ACME_DOCKERFILE, acmeEnvironment, getAcmeConfig, proxyImageTag } from "../tls/acme";
 import { createLog } from "../debug";
 import { Lo1Error } from "../errors";
@@ -66,13 +72,13 @@ export function generateCompose(
     volumes: {},
   };
 
-  const appServices = addContainerServices(doc, config);
-
   const { envVars: pluginEnvVars, serviceNames: infraServices } = mergeContributions(
     doc,
     config.name,
     contributions,
   );
+
+  const appServices = addContainerServices(doc, config, containerEnvBuilder(config, pluginEnvVars));
 
   if (config.proxy?.enabled !== false) {
     addProxyService(doc, config);
@@ -91,7 +97,31 @@ export function generateCompose(
   return { yaml, fileArgs, projectName, pluginEnvVars, infraServices, appServices };
 }
 
-function addContainerServices(doc: ComposeDocument, config: WorkspaceConfig): string[] {
+type ContainerEnvBuilder = (name: string, service: ServiceConfig) => Record<string, string>;
+
+/**
+ * Builds the environment lo1 gives a service it runs in a container: discovery
+ * variables for every other service, plugin variables, then the service's own env.
+ */
+export function containerEnvBuilder(
+  config: WorkspaceConfig,
+  pluginEnvVars: Record<string, string>,
+): ContainerEnvBuilder {
+  const registry = buildEndpointRegistry(config);
+  return (name, service) =>
+    buildServiceEnv(name, service, config, registry, pluginEnvVars, "container");
+}
+
+/** Docker Engine on Linux has no host.docker.internal unless it is mapped. */
+function hostGatewayEntries(): string[] | undefined {
+  return platform() === "linux" ? ["host.docker.internal:host-gateway"] : undefined;
+}
+
+function addContainerServices(
+  doc: ComposeDocument,
+  config: WorkspaceConfig,
+  envFor: ContainerEnvBuilder,
+): string[] {
   const netId = networkId(config.name);
   const names: string[] = [];
 
@@ -108,15 +138,15 @@ function addContainerServices(doc: ComposeDocument, config: WorkspaceConfig): st
     const svc: ComposeDocService = {
       image: service.containerImage,
       networks: [netId],
+      environment: envFor(name, service),
     };
 
     if (service.port) {
       svc.ports = [`${service.port}:${service.port}`];
     }
 
-    if (service.env && Object.keys(service.env).length > 0) {
-      svc.environment = { ...service.env };
-    }
+    const extraHosts = hostGatewayEntries();
+    if (extraHosts) svc.extra_hosts = extraHosts;
 
     doc.services[name] = svc;
     names.push(name);
@@ -168,10 +198,8 @@ function addProxyService(doc: ComposeDocument, config: WorkspaceConfig): void {
 
   applyAcmeImage(proxySvc, config);
 
-  // On Linux, Docker Engine doesn't provide host.docker.internal by default
-  if (platform() === "linux") {
-    proxySvc.extra_hosts = ["host.docker.internal:host-gateway"];
-  }
+  const extraHosts = hostGatewayEntries();
+  if (extraHosts) proxySvc.extra_hosts = extraHosts;
 
   doc.services[proxyServiceId(config.name)] = proxySvc;
   doc.volumes["caddy_data"] = {};
@@ -238,6 +266,8 @@ type ParsedComposeService = {
   build?: { context?: string };
   volumes?: (string | Record<string, unknown>)[];
   env_file?: string | string[];
+  environment?: string[] | Record<string, string | number | boolean | null>;
+  extra_hosts?: string[] | Record<string, string>;
 };
 
 type ParsedComposeDoc = {
@@ -279,6 +309,26 @@ function resolveComposePaths(svc: ParsedComposeService, serviceDir: string): voi
 }
 
 /**
+ * Adds lo1's environment to the compose service that shares the lo1 service's
+ * name. Values the compose file sets itself take precedence.
+ */
+function injectLo1Environment(svc: ParsedComposeService, lo1Env: Record<string, string>): void {
+  const own = svc.environment ?? {};
+  if (Array.isArray(own)) {
+    const ownKeys = new Set(own.map((entry) => entry.split("=")[0]));
+    const added = Object.entries(lo1Env)
+      .filter(([key]) => !ownKeys.has(key))
+      .map(([key, value]) => `${key}=${value}`);
+    svc.environment = [...added, ...own];
+  } else {
+    svc.environment = { ...lo1Env, ...own };
+  }
+
+  const extraHosts = hostGatewayEntries();
+  if (extraHosts && svc.extra_hosts === undefined) svc.extra_hosts = extraHosts;
+}
+
+/**
  * Reads per-service compose files, resolves all relative paths to absolute
  * based on each service's directory, and writes resolved copies to .lo1/.
  * This ensures Docker Compose path resolution works correctly regardless
@@ -287,9 +337,11 @@ function resolveComposePaths(svc: ParsedComposeService, serviceDir: string): voi
 export async function preprocessServiceComposeFiles(
   config: WorkspaceConfig,
   workspaceDir = ".",
+  pluginEnvVars: Record<string, string> = {},
 ): Promise<void> {
   const lo1Dir = join(workspaceDir, ".lo1");
   await mkdir(lo1Dir, { recursive: true });
+  const envFor = containerEnvBuilder(config, pluginEnvVars);
 
   for (const [name, service] of Object.entries(config.services)) {
     if (!service.compose) continue;
@@ -302,6 +354,9 @@ export async function preprocessServiceComposeFiles(
     for (const svc of Object.values(doc.services ?? {})) {
       resolveComposePaths(svc, serviceDir);
     }
+
+    const lo1Service = doc.services?.[name];
+    if (lo1Service) injectLo1Environment(lo1Service, envFor(name, service));
 
     const resolvedYaml = toYaml(doc, { noRefs: true, lineWidth: -1 });
     await writeFile(join(lo1Dir, `${name}.compose.yaml`), resolvedYaml, "utf-8");

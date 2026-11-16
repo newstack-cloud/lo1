@@ -1,4 +1,5 @@
 import { execFile, spawn, type ChildProcess, type StdioOptions } from "node:child_process";
+import { platform } from "node:os";
 import { promisify } from "node:util";
 import type { ContainerConfig } from "@lo1/sdk";
 import type { OutputLine } from "./process";
@@ -62,6 +63,11 @@ function containerName(options: ContainerRunnerOptions): string {
 function buildRunArgs(options: ContainerRunnerOptions): string[] {
   const { containerConfig, networkName, env } = options;
   const args = ["run", "-d", "--name", containerName(options), "--network", networkName];
+
+  // Docker Engine on Linux has no host.docker.internal unless it is mapped.
+  if (platform() === "linux") {
+    args.push("--add-host", "host.docker.internal:host-gateway");
+  }
 
   for (const bind of containerConfig.binds) {
     args.push("-v", bind);

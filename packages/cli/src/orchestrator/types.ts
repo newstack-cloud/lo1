@@ -14,9 +14,11 @@ import type {
 } from "../runner/compose";
 import type { ServiceHandle, StartServiceOptions } from "./service";
 
+export type ServiceStatus = "starting" | "started" | "completed" | "stopping" | "stopped";
+
 export type OrchestratorEvent =
   | { kind: "phase"; phase: string }
-  | { kind: "service"; service: string; status: "starting" | "started" | "stopping" | "stopped" }
+  | { kind: "service"; service: string; status: ServiceStatus }
   | { kind: "hook"; hook: string; output: HookOutput }
   | { kind: "output"; line: OutputLine }
   | { kind: "probe"; service: string; status: "polling" | "ready" | "failed"; attempt?: number }

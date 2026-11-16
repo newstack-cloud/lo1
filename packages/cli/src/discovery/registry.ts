@@ -48,6 +48,23 @@ export function buildEndpointRegistry(config: WorkspaceConfig): EndpointRegistry
   return { endpoints };
 }
 
+/** Hostname a container uses to reach a process running on the host. */
+export const HOST_GATEWAY = "host.docker.internal";
+
+/**
+ * How a container reaches an endpoint: by service name on the compose network
+ * when the target is itself a container, or through the host gateway when the
+ * target is a dev-mode process on the host.
+ */
+export function containerFacingUrl(endpoint: ServiceEndpoint): string {
+  if (endpoint.mode === "dev") return `http://${HOST_GATEWAY}:${endpoint.hostPort}`;
+  return endpoint.internalUrl;
+}
+
+function containerFacingPort(endpoint: ServiceEndpoint): number {
+  return endpoint.mode === "dev" ? endpoint.hostPort : endpoint.port;
+}
+
 export function buildDiscoveryEnvVars(
   registry: EndpointRegistry,
   consumerMode: "container" | "host",
@@ -56,8 +73,9 @@ export function buildDiscoveryEnvVars(
 
   for (const [name, endpoint] of registry.endpoints) {
     const key = toEnvKey(name);
-    const url = consumerMode === "container" ? endpoint.internalUrl : endpoint.externalUrl;
-    const port = consumerMode === "container" ? endpoint.port : endpoint.hostPort;
+    const isContainer = consumerMode === "container";
+    const url = isContainer ? containerFacingUrl(endpoint) : endpoint.externalUrl;
+    const port = isContainer ? containerFacingPort(endpoint) : endpoint.hostPort;
     env[`LO1_SERVICE_${key}_URL`] = url;
     env[`LO1_SERVICE_${key}_PORT`] = String(port);
     env[`LO1_SERVICE_${key}_PROXY_URL`] = endpoint.proxyUrl;

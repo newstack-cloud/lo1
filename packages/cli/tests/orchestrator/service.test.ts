@@ -70,8 +70,23 @@ function makeDeps(overrides: Partial<StartServiceDeps> = {}): StartServiceDeps {
       (_name, _svc, _config, _reg, _plugin, _mode) => ({ PORT: "3000" }),
     ),
     waitForReady: mock(() => Promise.resolve()),
+    composeUp: mock(() => Promise.resolve()),
+    composeWait: mock(() => Promise.resolve()),
+    composeLogs: mock(() => ({ kill: mock(() => {}) })),
     ...overrides,
   };
+}
+
+const compose = { projectName: "lo1-my-platform", fileArgs: [".lo1/c.yaml"], cwd: "/workspace" };
+
+function exitingProcess(code: number | null) {
+  return mock((_opts: { serviceName: string }) => ({
+    serviceName: _opts.serviceName,
+    pid: 12345,
+    running: false,
+    stop: mock(() => Promise.resolve(code)),
+    exitPromise: Promise.resolve(code),
+  }));
 }
 
 function makeOptions(overrides: Partial<StartServiceOptions> = {}): StartServiceOptions {
@@ -84,6 +99,7 @@ function makeOptions(overrides: Partial<StartServiceOptions> = {}): StartService
     registry: makeRegistry(),
     pluginEnvVars: {},
     workspaceDir: "/workspace",
+    compose,
     ...overrides,
   };
 }
@@ -174,6 +190,122 @@ describe("startService", () => {
     expect(handle.running).toBe(true);
     expect(deps.startProcess).not.toHaveBeenCalled();
     expect(deps.startContainer).not.toHaveBeenCalled();
+    const upOpts = (deps.composeUp as ReturnType<typeof mock>).mock.calls[0][0];
+    expect(upOpts.services).toEqual(["api"]);
+    expect(upOpts.projectName).toBe("lo1-my-platform");
+    const waitOpts = (deps.composeWait as ReturnType<typeof mock>).mock.calls[0][0];
+    expect(waitOpts.services).toEqual(["api"]);
+    expect(waitOpts.waitForExit).toEqual([]);
+  });
+
+  it("should wait for a container-mode init task to exit", async () => {
+    const config = makeConfig({
+      migrate: { mode: "container", containerImage: "migrate:1", initTask: true },
+    });
+    const deps = makeDeps();
+    const options = makeOptions({
+      serviceName: "migrate",
+      serviceConfig: config.services.migrate,
+      config,
+    });
+
+    await startService(options, deps);
+
+    const waitOpts = (deps.composeWait as ReturnType<typeof mock>).mock.calls[0][0];
+    expect(waitOpts.waitForExit).toEqual(["migrate"]);
+  });
+
+  it("should stop following logs when a compose service fails to become ready", async () => {
+    const kill = mock(() => {});
+    const config = makeConfig({ api: { mode: "container", containerImage: "api:1" } });
+    const deps = makeDeps({
+      composeLogs: mock(() => ({ kill })),
+      composeWait: mock(() => Promise.reject(new Error("unhealthy"))),
+    });
+    const options = makeOptions({ serviceConfig: config.services.api, config });
+
+    await expect(startService(options, deps)).rejects.toThrow("unhealthy");
+    expect(kill).toHaveBeenCalled();
+  });
+
+  it("should throw when a compose service has no compose project", async () => {
+    const config = makeConfig({ api: { mode: "container", containerImage: "api:1" } });
+    const options = makeOptions({
+      serviceConfig: config.services.api,
+      config,
+      compose: undefined,
+    });
+
+    await expect(startService(options, makeDeps())).rejects.toThrow(ServiceStartError);
+  });
+
+  it("should wait for a dev-mode init task to exit before returning", async () => {
+    const config = makeConfig({ migrate: { initTask: true, readinessProbe: "http://x/health" } });
+    const deps = makeDeps({ startProcess: exitingProcess(0) });
+    const options = makeOptions({
+      serviceName: "migrate",
+      serviceConfig: config.services.migrate,
+      config,
+    });
+
+    const handle = await startService(options, deps);
+
+    expect(handle.running).toBe(false);
+    expect(deps.waitForReady).not.toHaveBeenCalled();
+  });
+
+  it("should fail when a dev-mode init task exits non-zero", async () => {
+    const config = makeConfig({ migrate: { initTask: true } });
+    const deps = makeDeps({ startProcess: exitingProcess(3) });
+    const options = makeOptions({
+      serviceName: "migrate",
+      serviceConfig: config.services.migrate,
+      config,
+    });
+
+    await expect(startService(options, deps)).rejects.toThrow(
+      'Init task "migrate" exited with code 3',
+    );
+  });
+
+  it("should run postStart only after a dev-mode init task has exited", async () => {
+    const config = makeConfig({ migrate: { initTask: true, hooks: { postStart: "echo ok" } } });
+    const deps = makeDeps({ startProcess: exitingProcess(1) });
+    const options = makeOptions({
+      serviceName: "migrate",
+      serviceConfig: config.services.migrate,
+      config,
+    });
+
+    await expect(startService(options, deps)).rejects.toThrow(ServiceStartError);
+    expect(deps.executeHook).not.toHaveBeenCalled();
+  });
+
+  it("should stop a dev-mode init task when startup is aborted", async () => {
+    const stop = mock(() => Promise.resolve(null));
+    const config = makeConfig({ migrate: { initTask: true } });
+    const deps = makeDeps({
+      startProcess: mock((_opts) => ({
+        serviceName: _opts.serviceName,
+        pid: 1,
+        running: true,
+        stop,
+        exitPromise: new Promise<number | null>(() => {}),
+      })),
+    });
+    const controller = new AbortController();
+    const options = makeOptions({
+      serviceName: "migrate",
+      serviceConfig: config.services.migrate,
+      config,
+      signal: controller.signal,
+    });
+
+    const started = startService(options, deps);
+    controller.abort();
+
+    await expect(started).rejects.toThrow("Startup aborted");
+    expect(stop).toHaveBeenCalled();
   });
 
   it("should call preStart hook before starting runner", async () => {
