@@ -16,10 +16,10 @@ export class ConfigError extends Lo1Error {
   }
 }
 
-function formatZodIssues(issues: { path: (string | number)[]; message: string }[]): string {
+function formatZodIssues(issues: { path: PropertyKey[]; message: string }[]): string {
   return issues
     .map((issue) => {
-      const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
+      const path = issue.path.length > 0 ? issue.path.map(String).join(".") : "(root)";
       return `  - ${path}: ${issue.message}`;
     })
     .join("\n");
