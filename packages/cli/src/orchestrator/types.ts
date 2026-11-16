@@ -74,6 +74,8 @@ export type StartOptions = {
   workspaceDir?: string;
   serviceFilter?: string[];
   modeOverride?: "dev" | "container";
+  /** Start host processes so they keep running after lo1 exits. */
+  detached?: boolean;
   signal?: AbortSignal;
   onEvent?: (event: OrchestratorEvent) => void;
 };

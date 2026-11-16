@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { Lo1Error } from "../errors";
+import { loadWorkspaceEnv } from "../config/env";
 import { version } from "../../package.json";
 import { initCommand } from "./commands/init";
 import { upCommand } from "./commands/up";
@@ -16,7 +17,10 @@ program
   .name("lo1")
   .description("Multi-service local dev environment")
   .version(version)
-  .option("--json", "Output machine-readable JSON");
+  .option("--json", "Output machine-readable JSON")
+  .hook("preAction", async () => {
+    await loadWorkspaceEnv(process.cwd());
+  });
 
 program.addCommand(initCommand);
 program.addCommand(upCommand);

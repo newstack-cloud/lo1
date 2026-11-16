@@ -6,6 +6,7 @@ import { createLog } from "../debug";
 import { loadWorkspaceConfig } from "../config/loader";
 import { buildEndpointRegistry, buildServiceEnv } from "../discovery/registry";
 import { composeDown } from "../runner/compose";
+import { signalProcessTree } from "../runner/process";
 import { executeHook } from "../hooks/executor";
 import { readState as defaultReadState, removeState as defaultRemoveState } from "./state";
 import type { ServiceHandle } from "./service";
@@ -69,7 +70,7 @@ function hydrateHandle(
       async stop() {
         if (svc.pid) {
           try {
-            process.kill(svc.pid, "SIGTERM");
+            signalProcessTree(svc.pid, "SIGTERM");
           } catch {
             // Process may have already exited
           }

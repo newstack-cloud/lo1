@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess, type StdioOptions } from "node:child_process";
+import { closeSync, openSync } from "node:fs";
 import { platform } from "node:os";
 import { createLog } from "../debug";
 import { Lo1Error } from "../errors";
@@ -25,6 +26,12 @@ export type ProcessRunnerOptions = {
   cwd: string;
   env: Record<string, string>;
   onOutput?: (line: OutputLine) => void;
+  /**
+   * Run the process in its own process group with stdout and stderr appended
+   * to this file, so it can keep running after lo1 exits (`lo1 up --detach`).
+   * onOutput is not called in this mode.
+   */
+  logFile?: string;
 };
 
 export type ProcessHandle = {
@@ -33,20 +40,59 @@ export type ProcessHandle = {
   readonly running: boolean;
   stop(timeoutMs?: number): Promise<number | null>;
   readonly exitPromise: Promise<number | null>;
+  /** Lets lo1 exit while the process keeps running. Only meaningful with logFile. */
+  detach(): void;
 };
 
-export type SpawnFn = (
-  cmd: string,
-  args: string[],
-  options: { cwd: string; env: Record<string, string>; stdio: StdioOptions },
-) => ChildProcess;
+export type SpawnOptions = {
+  cwd: string;
+  env: Record<string, string>;
+  stdio: StdioOptions;
+  detached?: boolean;
+  windowsHide?: boolean;
+};
 
-function defaultSpawn(
+export type SpawnFn = (cmd: string, args: string[], options: SpawnOptions) => ChildProcess;
+
+function defaultSpawn(cmd: string, args: string[], options: SpawnOptions): ChildProcess {
+  return spawn(cmd, args, options);
+}
+
+/**
+ * Sends a signal to a process and, when it leads its own process group, to
+ * everything it started. A dev command usually runs under `sh -c`, so
+ * signalling only the shell would leave the real server running.
+ */
+export function signalProcessTree(pid: number, signal: NodeJS.Signals): void {
+  if (platform() !== "win32") {
+    try {
+      process.kill(-pid, signal);
+      return;
+    } catch {
+      // Not a process group leader; fall back to the process itself.
+    }
+  }
+  process.kill(pid, signal);
+}
+
+function spawnDetached(
+  spawnFn: SpawnFn,
   cmd: string,
   args: string[],
-  options: { cwd: string; env: Record<string, string>; stdio: StdioOptions },
+  options: ProcessRunnerOptions & { logFile: string; env: Record<string, string> },
 ): ChildProcess {
-  return spawn(cmd, args, options);
+  const fd = openSync(options.logFile, "a");
+  try {
+    return spawnFn(cmd, args, {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["ignore", fd, fd],
+      detached: true,
+      windowsHide: true,
+    });
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function getShellArgs(command: string): { cmd: string; args: string[] } {
@@ -70,12 +116,23 @@ export function startProcess(
   }
   Object.assign(mergedEnv, options.env);
 
-  const child = spawnFn(cmd, args, {
-    cwd: options.cwd,
-    env: mergedEnv,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  debug("startProcess: pid=%d", child.pid);
+  const isDetached = options.logFile !== undefined;
+  const child = options.logFile
+    ? spawnDetached(spawnFn, cmd, args, { ...options, logFile: options.logFile, env: mergedEnv })
+    : spawnFn(cmd, args, { cwd: options.cwd, env: mergedEnv, stdio: ["ignore", "pipe", "pipe"] });
+  debug("startProcess: pid=%d detached=%s", child.pid, isDetached);
+
+  const sendSignal = (signal: NodeJS.Signals) => {
+    if (isDetached && child.pid !== undefined) {
+      try {
+        signalProcessTree(child.pid, signal);
+      } catch {
+        // Already exited
+      }
+      return;
+    }
+    child.kill(signal);
+  };
 
   let isRunning = true;
 
@@ -114,12 +171,12 @@ export function startProcess(
     if (!isRunning) return exitPromise;
 
     if (platform() === "win32") {
-      child.kill("SIGKILL");
+      sendSignal("SIGKILL");
     } else {
-      child.kill("SIGTERM");
+      sendSignal("SIGTERM");
 
       const timer = setTimeout(() => {
-        if (isRunning) child.kill("SIGKILL");
+        if (isRunning) sendSignal("SIGKILL");
       }, timeoutMs);
 
       return exitPromise.then((code) => {
@@ -141,5 +198,6 @@ export function startProcess(
     },
     stop,
     exitPromise,
+    detach: () => child.unref(),
   };
 }
