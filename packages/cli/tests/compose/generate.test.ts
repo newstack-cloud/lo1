@@ -177,6 +177,29 @@ describe("generateCompose", () => {
     expect(result.fileArgs).toContain("./compose.extra.yaml");
   });
 
+  it("should publish hostPort for container-mode services", () => {
+    const config = makeConfig({
+      db: { mode: "container", containerImage: "postgres:17", port: 5432, hostPort: 15432 },
+    });
+
+    const doc = parseResult(generateCompose(config).yaml);
+
+    expect(doc.services.db.ports).toEqual(["15432:5432"]);
+  });
+
+  it("should ignore per-service compose files unless the service is in container mode", () => {
+    const config = makeConfig({
+      api: { mode: "dev", command: "npm start", compose: "api.compose.yaml" },
+      worker: { mode: "skip", compose: "worker.compose.yaml" },
+    });
+
+    const result = generateCompose(config);
+
+    expect(result.fileArgs.some((f) => f.includes("api.compose.yaml"))).toBe(false);
+    expect(result.fileArgs.some((f) => f.includes("worker.compose.yaml"))).toBe(false);
+    expect(result.appServices).toEqual([]);
+  });
+
   it("should collect file args from extraCompose object form", () => {
     const config = makeConfig(
       { api: { mode: "container", containerImage: "api:1", port: 3000 } },
@@ -222,14 +245,14 @@ describe("generateCompose", () => {
   it("should give container-mode services discovery env for the rest of the workspace", () => {
     const config = makeConfig({
       api: { mode: "container", containerImage: "api:1", port: 3000 },
-      web: { mode: "dev", command: "vite", port: 5173, hostPort: 15173 },
+      web: { mode: "dev", command: "vite", port: 5173 },
     });
 
     const doc = parseResult(generateCompose(config).yaml);
     const env = doc.services.api.environment;
 
     expect(env.LO1_SERVICE_API_URL).toBe("http://api:3000");
-    expect(env.LO1_SERVICE_WEB_URL).toBe("http://host.docker.internal:15173");
+    expect(env.LO1_SERVICE_WEB_URL).toBe("http://host.docker.internal:5173");
     expect(env.LO1_SERVICE_NAME).toBe("api");
     expect(env.LO1_WORKSPACE_NAME).toBe("test-ws");
   });

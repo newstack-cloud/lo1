@@ -1,4 +1,5 @@
 import { describe, it, expect, mock } from "bun:test";
+import { resolve } from "node:path";
 import { stopWorkspace, hydrateHandles, type StopDeps } from "../../src/orchestrator/stop";
 import type { ServiceHandle } from "../../src/orchestrator/service";
 import type { WorkspaceState, OrchestratorEvent } from "../../src/orchestrator/types";
@@ -78,6 +79,85 @@ describe("stopWorkspace", () => {
     const [hookName, command] = (deps.executeHook as ReturnType<typeof mock>).mock.calls[0];
     expect(hookName).toBe("workspace:preStop");
     expect(command).toBe("echo bye");
+  });
+
+  it("should run a service's preStop hook in its directory before stopping it", async () => {
+    const calls: string[] = [];
+    const deps = makeDeps({
+      loadConfig: mock(() =>
+        Promise.resolve({
+          version: "1" as const,
+          name: "my-platform",
+          services: {
+            web: {
+              type: "app",
+              path: "./web",
+              port: 4000,
+              mode: "dev" as const,
+              dependsOn: [],
+              initTask: false,
+              hooks: { preStop: "./drain.sh" },
+            },
+          },
+        }),
+      ),
+      executeHook: mock((name, _cmd, _opts) => {
+        calls.push(`hook:${name}`);
+        return Promise.resolve({ exitCode: 0, hookName: name });
+      }),
+    });
+    const handle: ServiceHandle = {
+      serviceName: "web",
+      type: "process",
+      running: true,
+      stop: mock(async () => {
+        calls.push("stop:web");
+      }),
+    };
+
+    await stopWorkspace({ workspaceDir: "/workspace", handles: [handle] }, deps);
+
+    expect(calls).toEqual(["hook:web:preStop", "stop:web"]);
+    const opts = (deps.executeHook as ReturnType<typeof mock>).mock.calls[0][2];
+    expect(opts.cwd).toBe(resolve("/workspace", "web"));
+    expect(opts.env.LO1_SERVICE_NAME).toBe("web");
+  });
+
+  it("should keep stopping services when a preStop hook fails", async () => {
+    const deps = makeDeps({
+      loadConfig: mock(() =>
+        Promise.resolve({
+          version: "1" as const,
+          name: "my-platform",
+          services: {
+            web: {
+              type: "app",
+              path: "./web",
+              mode: "dev" as const,
+              dependsOn: [],
+              initTask: false,
+              hooks: { preStop: "exit 1" },
+            },
+          },
+        }),
+      ),
+      executeHook: mock(() => Promise.reject(new Error("exit 1"))),
+    });
+    const stop = mock(() => Promise.resolve());
+    const handle: ServiceHandle = { serviceName: "web", type: "process", running: true, stop };
+    const events: OrchestratorEvent[] = [];
+
+    await stopWorkspace(
+      { workspaceDir: "/workspace", handles: [handle], onEvent: (e) => events.push(e) },
+      deps,
+    );
+
+    expect(stop).toHaveBeenCalled();
+    expect(deps.composeDown).toHaveBeenCalled();
+    expect(events).toContainEqual({
+      kind: "error",
+      message: 'preStop hook for "web" failed: exit 1',
+    });
   });
 
   it("should stop container services using containerId from state", async () => {

@@ -32,7 +32,9 @@ export function buildEndpointRegistry(config: WorkspaceConfig): EndpointRegistry
   for (const [name, service] of Object.entries(config.services)) {
     if (!service.port || service.mode === "skip") continue;
 
-    const hostPort = service.hostPort ?? service.port;
+    // A dev-mode process listens on `port` directly; only a container's port is remapped.
+    const hostPort =
+      service.mode === "container" ? (service.hostPort ?? service.port) : service.port;
     endpoints.set(name, {
       name,
       port: service.port,

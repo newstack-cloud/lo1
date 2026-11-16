@@ -85,9 +85,8 @@ export function generateCompose(
     infraServices.push(proxyServiceId(config.name));
   }
 
-  // Services with per-service compose files are app services
   for (const [name, service] of Object.entries(config.services)) {
-    if (service.compose) appServices.push(name);
+    if (usesComposeFile(service)) appServices.push(name);
   }
 
   const fileArgs = buildFileArgs(config);
@@ -95,6 +94,11 @@ export function generateCompose(
 
   debug("generateCompose: infra=%d app=%d services", infraServices.length, appServices.length);
   return { yaml, fileArgs, projectName, pluginEnvVars, infraServices, appServices };
+}
+
+/** A per-service compose file only applies when the service runs in container mode. */
+function usesComposeFile(service: ServiceConfig): boolean {
+  return Boolean(service.compose) && service.mode === "container";
 }
 
 type ContainerEnvBuilder = (name: string, service: ServiceConfig) => Record<string, string>;
@@ -168,7 +172,7 @@ function addContainerServices(
     };
 
     if (service.port) {
-      svc.ports = [`${service.port}:${service.port}`];
+      svc.ports = [`${service.hostPort ?? service.port}:${service.port}`];
     }
 
     const extraHosts = hostGatewayEntries();
@@ -267,7 +271,7 @@ function buildFileArgs(config: WorkspaceConfig): string[] {
 
   // Per-service compose files are preprocessed into .lo1/ with resolved paths
   for (const [name, service] of Object.entries(config.services)) {
-    if (service.compose) {
+    if (usesComposeFile(service)) {
       fileArgs.push(join(".lo1", `${name}.compose.yaml`));
     }
   }
@@ -392,7 +396,7 @@ export async function preprocessServiceComposeFiles(
   const envFor = containerEnvBuilder(config, pluginEnvVars);
 
   for (const [name, service] of Object.entries(config.services)) {
-    if (!service.compose) continue;
+    if (!service.compose || !usesComposeFile(service)) continue;
 
     const composeFilePath = resolve(service.path, service.compose);
     const raw = await readFile(composeFilePath, "utf-8");
