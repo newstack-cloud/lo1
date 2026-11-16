@@ -13,6 +13,7 @@ import type {
   ComposeLogsHandle,
 } from "../runner/compose";
 import type { ServiceHandle, StartServiceOptions } from "./service";
+import type { PortClaim } from "../doctor/ports";
 
 export type ServiceStatus = "starting" | "started" | "completed" | "stopping" | "stopped";
 
@@ -67,6 +68,8 @@ export type OrchestratorDeps = {
   readState: (workspaceDir?: string) => Promise<WorkspaceState | null>;
   writeState: (state: WorkspaceState, workspaceDir?: string) => Promise<void>;
   removeState: (workspaceDir?: string) => Promise<void>;
+  /** Returns the ports the workspace needs that something else is already using. */
+  findPortConflicts: (config: WorkspaceConfig) => Promise<PortClaim[]>;
 };
 
 export type StartOptions = {

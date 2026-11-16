@@ -100,11 +100,26 @@ function makeDeps(overrides: Partial<OrchestratorDeps> = {}): OrchestratorDeps {
     readState: mock(() => Promise.resolve(null)),
     writeState: mock(() => Promise.resolve()),
     removeState: mock(() => Promise.resolve()),
+    findPortConflicts: mock(() => Promise.resolve([])),
     ...overrides,
   };
 }
 
 describe("startWorkspace", () => {
+  it("should fail before starting anything when a port it needs is in use", async () => {
+    const deps = makeDeps({
+      findPortConflicts: mock(() =>
+        Promise.resolve([{ port: 3000, owner: 'service "api"', setting: "services.api.port" }]),
+      ),
+    });
+
+    await expect(startWorkspace({}, deps)).rejects.toThrow(
+      'Port 3000 is already in use, but service "api" needs it',
+    );
+    expect(deps.composeUp).not.toHaveBeenCalled();
+    expect(deps.startService).not.toHaveBeenCalled();
+  });
+
   it("should load config from provided path", async () => {
     const deps = makeDeps();
 
