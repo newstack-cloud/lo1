@@ -139,6 +139,8 @@ export async function startWorkspace(
     fileArgs: composeResult.fileArgs,
     workspaceDir,
     services: {} as Record<string, ServiceState>,
+    pluginEnvVars: composeResult.pluginEnvVars,
+    ...(options.modeOverride && { modeOverride: options.modeOverride }),
   };
   await deps.writeState(baseState, workspaceDir);
 
@@ -215,7 +217,16 @@ export async function startWorkspace(
       for (const handle of handles) handle.releaseLogs?.();
     },
   };
-  return { handles, composeOptions, config, logsHandle };
+  return {
+    handles,
+    composeOptions,
+    config,
+    logsHandle,
+    plugins,
+    registry,
+    pluginEnvVars: composeResult.pluginEnvVars,
+    compose: composeContext,
+  };
 }
 
 async function cleanupStaleWorkspace(
@@ -369,7 +380,10 @@ async function startInfrastructure(
   return logsHandle;
 }
 
-function applyModeOverride(config: WorkspaceConfig, mode?: "dev" | "container"): WorkspaceConfig {
+export function applyModeOverride(
+  config: WorkspaceConfig,
+  mode?: "dev" | "container",
+): WorkspaceConfig {
   if (!mode) return config;
 
   const services: Record<string, (typeof config.services)[string]> = {};
@@ -426,7 +440,7 @@ async function collectContributions(
   return contributions;
 }
 
-function buildServiceState(handles: ServiceHandle[]): Record<string, ServiceState> {
+export function buildServiceState(handles: ServiceHandle[]): Record<string, ServiceState> {
   const services: Record<string, ServiceState> = {};
   for (const h of handles) {
     // A finished init task has nothing left to stop, and its pid may be reused.
@@ -574,7 +588,7 @@ async function startServicesInLayers(ctx: LayerStartContext): Promise<ServiceHan
   return allHandles;
 }
 
-function createLogger(emit: (event: OrchestratorEvent) => void) {
+export function createLogger(emit: (event: OrchestratorEvent) => void) {
   return {
     info: (msg: string) => emit({ kind: "phase", phase: msg }),
     warn: (msg: string) => emit({ kind: "error", message: msg }),

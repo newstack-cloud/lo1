@@ -77,6 +77,15 @@ describe("composeUp", () => {
     expect(args).not.toContain("--wait");
   });
 
+  it("should add --force-recreate only when asked", async () => {
+    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild());
+    await composeUp(defaultOptions, spawnMock);
+    await composeUp({ ...defaultOptions, forceRecreate: true }, spawnMock);
+
+    expect(spawnMock.mock.calls[0][1]).not.toContain("--force-recreate");
+    expect(spawnMock.mock.calls[1][1]).toContain("--force-recreate");
+  });
+
   it("should stream output via onOutput callback", async () => {
     const child = createMockChild();
     // Prevent auto-close so we can emit data first

@@ -3,6 +3,9 @@ import { spawn } from "node:child_process";
 import { platform } from "node:os";
 import { startWorkspace } from "../../orchestrator/start";
 import { stopWorkspace } from "../../orchestrator/stop";
+import { watchPluginServices } from "../../orchestrator/watch";
+import { startService } from "../../orchestrator/service";
+import { executeHook } from "../../hooks/executor";
 import { loadWorkspaceConfig } from "../../config/loader";
 import { collectDomains } from "../../proxy/domains";
 import { initLogDir, appendLog, logDir } from "../../logs/writer";
@@ -186,7 +189,20 @@ export const upCommand = new Command("up")
         return;
       }
 
+      const watcher = watchPluginServices(result.handles, {
+        config: result.config,
+        workspaceDir,
+        registry: result.registry,
+        plugins: result.plugins,
+        pluginEnvVars: result.pluginEnvVars,
+        compose: result.compose,
+        detached: false,
+        signal: controller.signal,
+        emit: onEvent,
+        deps: { startService, executeHook },
+      });
       await waitForShutdownSignal(controller);
+      watcher.stop();
     } catch (err) {
       if (!controller.signal.aborted) {
         startupError = err;

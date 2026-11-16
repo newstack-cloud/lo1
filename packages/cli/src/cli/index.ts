@@ -11,6 +11,7 @@ import { hostsCommand } from "./commands/hosts";
 import { tlsSetupCommand } from "./commands/tls-setup";
 import { logsCommand } from "./commands/logs";
 import { doctorCommand } from "./commands/doctor";
+import { restartCommand } from "./commands/restart";
 
 export const program = new Command();
 
@@ -31,6 +32,7 @@ program.addCommand(hostsCommand);
 program.addCommand(tlsSetupCommand);
 program.addCommand(logsCommand);
 program.addCommand(doctorCommand);
+program.addCommand(restartCommand);
 
 export function formatErrorForOutput(err: unknown, json: boolean): string {
   if (json) {
