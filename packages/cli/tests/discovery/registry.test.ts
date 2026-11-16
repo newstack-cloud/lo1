@@ -153,12 +153,22 @@ describe("buildEndpointRegistry", () => {
 });
 
 describe("buildDiscoveryEnvVars", () => {
-  it("should generate internal URLs for container consumers", () => {
+  it("should give container consumers the compose network address of container targets", () => {
     const registry = buildEndpointRegistry(makeConfig());
     const env = buildDiscoveryEnvVars(registry, "container");
 
-    expect(env["LO1_SERVICE_USERS_API_URL"]).toBe("http://users-api:8080");
     expect(env["LO1_SERVICE_ORDERS_API_URL"]).toBe("http://orders-api:8081");
+    expect(env["LO1_SERVICE_ORDERS_API_PORT"]).toBe("8081");
+  });
+
+  it("should give container consumers the host gateway address of dev-mode targets", () => {
+    const config = makeConfig();
+    config.services["users-api"].hostPort = 18080;
+    const registry = buildEndpointRegistry(config);
+    const env = buildDiscoveryEnvVars(registry, "container");
+
+    expect(env["LO1_SERVICE_USERS_API_URL"]).toBe("http://host.docker.internal:18080");
+    expect(env["LO1_SERVICE_USERS_API_PORT"]).toBe("18080");
   });
 
   it("should generate localhost URLs for host consumers", () => {

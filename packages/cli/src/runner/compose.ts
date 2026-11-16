@@ -156,6 +156,9 @@ export function composeLogs(
   spawnFn: ComposeSpawnFn = spawn,
 ): ComposeLogsHandle {
   const args = [...buildBaseArgs(options), "logs", "-f", "--no-color", "--since", "0s"];
+  if (options.services?.length) {
+    args.push(...options.services);
+  }
   const child = spawnFn("docker", args, {
     cwd: options.cwd,
     stdio: ["ignore", "pipe", "pipe"],

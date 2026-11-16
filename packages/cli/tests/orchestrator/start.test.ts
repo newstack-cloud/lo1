@@ -222,7 +222,7 @@ describe("startWorkspace", () => {
     expect(waitCalls[0][0].waitForExit).toEqual([]);
   });
 
-  it("should call composeUp and composeWait twice when both infra and app services exist", async () => {
+  it("should start only infrastructure in the compose phase, not compose-run services", async () => {
     const deps = makeDeps({
       generateCompose: mock(() => ({
         yaml: "version: '3'",
@@ -237,14 +237,45 @@ describe("startWorkspace", () => {
     await startWorkspace({}, deps);
 
     const upCalls = (deps.composeUp as ReturnType<typeof mock>).mock.calls;
-    expect(upCalls).toHaveLength(2);
+    expect(upCalls).toHaveLength(1);
     expect(upCalls[0][0].services).toEqual(["postgres", "lo1-my-platform-proxy"]);
-    expect(upCalls[1][0].services).toEqual(["api"]);
 
     const waitCalls = (deps.composeWait as ReturnType<typeof mock>).mock.calls;
-    expect(waitCalls).toHaveLength(2);
+    expect(waitCalls).toHaveLength(1);
     expect(waitCalls[0][0].services).toEqual(["postgres", "lo1-my-platform-proxy"]);
-    expect(waitCalls[1][0].services).toEqual(["api"]);
+  });
+
+  it("should pass the compose project to each service it starts", async () => {
+    const deps = makeDeps();
+
+    await startWorkspace({}, deps);
+
+    const startCalls = (deps.startService as ReturnType<typeof mock>).mock.calls;
+    expect(startCalls[0][0].compose).toEqual({
+      projectName: "lo1-my-platform",
+      fileArgs: [".lo1/docker-compose.yml"],
+      cwd: ".",
+    });
+  });
+
+  it("should release service log followers when the logs handle is killed", async () => {
+    const releaseLogs = mock(() => {});
+    const deps = makeDeps({
+      startService: mock((opts) =>
+        Promise.resolve({
+          serviceName: opts.serviceName,
+          type: "compose" as const,
+          running: true,
+          stop: mock(() => Promise.resolve()),
+          releaseLogs,
+        }),
+      ),
+    });
+
+    const result = await startWorkspace({}, deps);
+    result.logsHandle.kill();
+
+    expect(releaseLogs).toHaveBeenCalledTimes(2);
   });
 
   it("should pass initTaskServices as waitForExit from extraCompose config", async () => {
@@ -276,7 +307,7 @@ describe("startWorkspace", () => {
     expect(waitCalls[0][0].waitForExit).toEqual(["api_migrator", "localstack_init"]);
   });
 
-  it("should include service-level initTask in waitForExit", async () => {
+  it("should leave service-level init tasks to their layer and report them completed", async () => {
     const config = makeConfig({
       services: {
         api: {
@@ -315,13 +346,14 @@ describe("startWorkspace", () => {
       })),
     });
 
-    await startWorkspace({}, deps);
+    const events: OrchestratorEvent[] = [];
+    await startWorkspace({ onEvent: (e) => events.push(e) }, deps);
 
     const waitCalls = (deps.composeWait as ReturnType<typeof mock>).mock.calls;
-    // Infra wait includes migrator in waitForExit
-    expect(waitCalls[0][0].waitForExit).toContain("migrator");
-    // App wait also includes migrator since it's in appServices
-    expect(waitCalls[1][0].waitForExit).toContain("migrator");
+    expect(waitCalls).toHaveLength(1);
+    expect(waitCalls[0][0].waitForExit).toEqual([]);
+    expect(events).toContainEqual({ kind: "service", service: "migrator", status: "completed" });
+    expect(events).toContainEqual({ kind: "service", service: "api", status: "started" });
   });
 
   it("should skip composeUp and composeWait when no infra or app services", async () => {
