@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://unpkg.com/@lo1/sdk/schemas/lo1.v1.schema.json
+#
+# A small shop: Postgres, a migration and seed step, an API and a web frontend.
+# Run `lo1 up`, then open https://web.shop.local.
+version: "1"
+name: shop
+
+# Postgres, as an ordinary Docker Compose file.
+extraCompose: ./infra.compose.yaml
+
+services:
+  # Init tasks run once, in dependency order, and must exit 0 before
+  # anything that depends on them starts.
+  migrate:
+    type: service
+    path: ./api
+    command: npm install --no-audit --no-fund --loglevel=error && node migrate.js
+    initTask: true
+    env:
+      DATABASE_URL: postgres://shop:shop@localhost:54329/shop
+
+  seed:
+    type: service
+    path: ./api
+    command: node seed.js
+    initTask: true
+    dependsOn: [migrate]
+    env:
+      DATABASE_URL: postgres://shop:shop@localhost:54329/shop
+
+  api:
+    type: service
+    path: ./api
+    port: 4100
+    command: node server.js
+    readinessProbe: http://localhost:4100/health
+    dependsOn: [seed]
+    env:
+      PORT: "4100"
+      DATABASE_URL: postgres://shop:shop@localhost:54329/shop
+
+  web:
+    type: app
+    path: ./web
+    port: 4200
+    command: node server.js
+    dependsOn: [api]
+    env:
+      PORT: "4200"
+
+proxy:
+  tld: local
+  tls:
+    enabled: true

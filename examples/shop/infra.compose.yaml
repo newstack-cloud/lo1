@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+      POSTGRES_DB: shop
+    ports:
+      # An uncommon host port, so it doesn't clash with a local Postgres.
+      - "54329:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "shop"]
+      interval: 2s
+      retries: 15
