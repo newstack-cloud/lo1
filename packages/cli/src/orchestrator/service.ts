@@ -254,12 +254,16 @@ async function startWithContainer(
   };
 
   const containerConfig = await plugin!.configureContainer!(input);
+  // The registry advertises this service at its host port, as for a host
+  // process, so the container must publish it there.
+  const own = registry.endpoints.get(serviceName);
   const handle = await deps.startContainer({
     workspaceName: config.name,
     serviceName,
     containerConfig,
     networkName: `${projectId(config.name)}_${networkId(config.name)}`,
     env,
+    ports: own ? [`${own.hostPort}:${own.port}`] : [],
     onOutput: options.onOutput,
   });
 

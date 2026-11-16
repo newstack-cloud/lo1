@@ -52,7 +52,7 @@ function makeDeps(overrides: Partial<StartServiceDeps> = {}): StartServiceDeps {
       pid: 12345,
       running: true,
       stop: mock(() => Promise.resolve(0 as number | null)),
-      exitPromise: new Promise<number | null>(() => { }),
+      exitPromise: new Promise<number | null>(() => {}),
     })),
     startContainer: mock((_opts) =>
       Promise.resolve({
@@ -60,15 +60,11 @@ function makeDeps(overrides: Partial<StartServiceDeps> = {}): StartServiceDeps {
         containerId: "abc123",
         running: true,
         stop: mock(() => Promise.resolve()),
-        exitPromise: new Promise<number | null>(() => { }),
+        exitPromise: new Promise<number | null>(() => {}),
       }),
     ),
-    executeHook: mock((_name, _cmd, _opts) =>
-      Promise.resolve({ exitCode: 0, hookName: _name }),
-    ),
-    buildServiceEnv: mock(
-      (_name, _svc, _config, _reg, _plugin, _mode) => ({ PORT: "3000" }),
-    ),
+    executeHook: mock((_name, _cmd, _opts) => Promise.resolve({ exitCode: 0, hookName: _name })),
+    buildServiceEnv: mock((_name, _svc, _config, _reg, _plugin, _mode) => ({ PORT: "3000" })),
     waitForReady: mock(() => Promise.resolve()),
     composeUp: mock(() => Promise.resolve()),
     composeWait: mock(() => Promise.resolve()),
@@ -151,6 +147,25 @@ describe("startService", () => {
     expect(handle.type).toBe("container");
     expect(deps.startContainer).toHaveBeenCalledTimes(1);
     expect(plugin.configureContainer).toHaveBeenCalledTimes(1);
+  });
+
+  it("should publish a plugin container's port where the registry advertises it", async () => {
+    const plugin: Plugin = {
+      name: "celerity",
+      configureContainer: mock(async (_input) => ({
+        image: "celerity:latest",
+        cmd: ["run"],
+        envVars: {},
+        binds: [],
+        workingDir: "/app",
+      })),
+    };
+    const deps = makeDeps();
+
+    await startService(makeOptions({ plugin }), deps);
+
+    const [opts] = (deps.startContainer as ReturnType<typeof mock>).mock.calls[0];
+    expect(opts.ports).toEqual(["3000:3000"]);
   });
 
   it("should call configureContainer with correct ContainerInput", async () => {
@@ -325,7 +340,7 @@ describe("startService", () => {
           pid: 12345,
           running: true,
           stop: mock(() => Promise.resolve(0 as number | null)),
-          exitPromise: new Promise<number | null>(() => { }),
+          exitPromise: new Promise<number | null>(() => {}),
         };
       }),
     });
@@ -353,7 +368,7 @@ describe("startService", () => {
           pid: 12345,
           running: true,
           stop: mock(() => Promise.resolve(0 as number | null)),
-          exitPromise: new Promise<number | null>(() => { }),
+          exitPromise: new Promise<number | null>(() => {}),
         };
       }),
     });
@@ -418,9 +433,8 @@ describe("startService", () => {
 
     await startService(options, deps);
 
-    const [name, _svc, _config, _reg, pluginEnv] = (
-      deps.buildServiceEnv as ReturnType<typeof mock>
-    ).mock.calls[0];
+    const [name, _svc, _config, _reg, pluginEnv] = (deps.buildServiceEnv as ReturnType<typeof mock>)
+      .mock.calls[0];
     expect(name).toBe("api");
     expect(pluginEnv).toEqual({ DB_URL: "pg:5432" });
   });
@@ -452,12 +466,10 @@ describe("startService", () => {
         pid: 12345,
         running: true,
         stop: stopMock,
-        exitPromise: new Promise<number | null>(() => { }),
+        exitPromise: new Promise<number | null>(() => {}),
       })),
       waitForReady: mock(() =>
-        Promise.reject(
-          new ReadinessProbeError("api", "http://localhost:3000/health", "timed out"),
-        ),
+        Promise.reject(new ReadinessProbeError("api", "http://localhost:3000/health", "timed out")),
       ),
     });
     const options = makeOptions({ serviceConfig: config.services.api, config });

@@ -23,6 +23,8 @@ export type ContainerRunnerOptions = {
   containerConfig: ContainerConfig;
   networkName: string;
   env: Record<string, string>;
+  /** Port mappings published on the host, as `hostPort:containerPort`. */
+  ports?: string[];
   onOutput?: (line: OutputLine) => void;
 };
 
@@ -67,6 +69,10 @@ function buildRunArgs(options: ContainerRunnerOptions): string[] {
   // Docker Engine on Linux has no host.docker.internal unless it is mapped.
   if (platform() === "linux") {
     args.push("--add-host", "host.docker.internal:host-gateway");
+  }
+
+  for (const mapping of options.ports ?? []) {
+    args.push("-p", mapping);
   }
 
   for (const bind of containerConfig.binds) {

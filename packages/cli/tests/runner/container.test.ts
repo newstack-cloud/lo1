@@ -24,9 +24,7 @@ const defaultOptions: ContainerRunnerOptions = {
   env: { LO1_SERVICE_NAME: "users-api" },
 };
 
-function makeExecFn(
-  containerId = "abc123def456",
-): ExecFn & ReturnType<typeof mock> {
+function makeExecFn(containerId = "abc123def456"): ExecFn & ReturnType<typeof mock> {
   return mock<ExecFn>((_cmd, _args, _opts?) =>
     Promise.resolve({ stdout: `${containerId}\n`, stderr: "" }),
   );
@@ -88,6 +86,15 @@ describe("startContainer", () => {
 
     const wIdx = args.indexOf("-w");
     expect(args[wIdx + 1]).toBe("/opt/app");
+  });
+
+  it("should publish ports as -p flags", async () => {
+    const execFn = makeExecFn();
+
+    await startContainer({ ...defaultOptions, ports: ["3000:3000"] }, execFn, makeLogSpawnFn());
+
+    const args = execFn.mock.calls[0][1] as string[];
+    expect(args[args.indexOf("-p") + 1]).toBe("3000:3000");
   });
 
   it("should map binds as -v flags", async () => {
@@ -160,11 +167,11 @@ describe("startContainer", () => {
     const calls = execFn.mock.calls;
     const stopCall = calls.find((c) => (c[1] as string[]).includes("stop"));
     expect(stopCall).toBeDefined();
-    expect((stopCall![1] as string[])).toContain("lo1-my-platform-users-api");
+    expect(stopCall![1] as string[]).toContain("lo1-my-platform-users-api");
 
     const rmCall = calls.find((c) => (c[1] as string[]).includes("rm"));
     expect(rmCall).toBeDefined();
-    expect((rmCall![1] as string[])).toContain("lo1-my-platform-users-api");
+    expect(rmCall![1] as string[]).toContain("lo1-my-platform-users-api");
   });
 
   it("should use custom timeout on stop", async () => {
