@@ -57,6 +57,15 @@ describe("composeUp", () => {
     expect(opts?.cwd).toBe("/workspace");
   });
 
+  it("should pass --no-deps when asked to", async () => {
+    const spawnMock = mock<ComposeSpawnFn>(() => createMockChild());
+    await composeUp({ ...defaultOptions, services: ["api"], noDeps: true }, spawnMock);
+
+    const args = spawnMock.mock.calls[0][1];
+    expect(args).toContain("--no-deps");
+    expect(args.indexOf("--no-deps")).toBeLessThan(args.indexOf("api"));
+  });
+
   it("should include up -d --build without --wait", async () => {
     const spawnMock = mock<ComposeSpawnFn>(() => createMockChild());
     await composeUp(defaultOptions, spawnMock);

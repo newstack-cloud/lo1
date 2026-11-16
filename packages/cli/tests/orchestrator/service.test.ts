@@ -69,6 +69,7 @@ function makeDeps(overrides: Partial<StartServiceDeps> = {}): StartServiceDeps {
     composeUp: mock(() => Promise.resolve()),
     composeWait: mock(() => Promise.resolve()),
     composeLogs: mock(() => ({ kill: mock(() => {}) })),
+    findComposeHelpers: mock(() => Promise.resolve([] as string[])),
     ...overrides,
   };
 }
@@ -207,10 +208,27 @@ describe("startService", () => {
     expect(deps.startContainer).not.toHaveBeenCalled();
     const upOpts = (deps.composeUp as ReturnType<typeof mock>).mock.calls[0][0];
     expect(upOpts.services).toEqual(["api"]);
+    expect(upOpts.noDeps).toBe(true);
     expect(upOpts.projectName).toBe("lo1-my-platform");
     const waitOpts = (deps.composeWait as ReturnType<typeof mock>).mock.calls[0][0];
     expect(waitOpts.services).toEqual(["api"]);
     expect(waitOpts.waitForExit).toEqual([]);
+  });
+
+  it("should start a compose service's own helpers but wait only on the service", async () => {
+    const config = makeConfig({
+      web: { mode: "container", compose: "compose.yaml" },
+    });
+    const deps = makeDeps({ findComposeHelpers: mock(() => Promise.resolve(["cache"])) });
+    const options = makeOptions({ serviceName: "web", serviceConfig: config.services.web, config });
+
+    await startService(options, deps);
+
+    const upOpts = (deps.composeUp as ReturnType<typeof mock>).mock.calls[0][0];
+    expect(upOpts.services).toEqual(["web", "cache"]);
+    expect(upOpts.noDeps).toBe(true);
+    const waitOpts = (deps.composeWait as ReturnType<typeof mock>).mock.calls[0][0];
+    expect(waitOpts.services).toEqual(["web"]);
   });
 
   it("should wait for a container-mode init task to exit", async () => {

@@ -37,6 +37,8 @@ export type ComposeExecOptions = {
   cwd?: string;
   signal?: AbortSignal;
   onOutput?: (line: ComposeOutputLine) => void;
+  /** Start only the listed services, not what they depend on (composeUp only). */
+  noDeps?: boolean;
 };
 
 export type ComposeServiceStatus = {
@@ -92,6 +94,7 @@ export async function composeUp(
 ): Promise<void> {
   debug("composeUp: project=%s services=%o", options.projectName, options.services ?? []);
   const args = [...buildBaseArgs(options), "up", "-d", "--build"];
+  if (options.noDeps) args.push("--no-deps");
   if (options.services?.length) {
     args.push(...options.services);
   }
