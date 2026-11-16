@@ -68,6 +68,7 @@ type LayerStartContext = {
   pluginEnvVars: Record<string, string>;
   workspaceDir: string;
   compose: ComposeContext;
+  detached: boolean;
   signal?: AbortSignal;
   deps: OrchestratorDeps;
   emit: (event: OrchestratorEvent) => void;
@@ -191,6 +192,7 @@ export async function startWorkspace(
     pluginEnvVars: composeResult.pluginEnvVars,
     workspaceDir,
     compose: composeContext,
+    detached: options.detached === true,
     signal: options.signal,
     deps,
     emit,
@@ -533,6 +535,7 @@ async function startServicesInLayers(ctx: LayerStartContext): Promise<ServiceHan
             pluginEnvVars: ctx.pluginEnvVars,
             workspaceDir: ctx.workspaceDir,
             compose: ctx.compose,
+            detached: ctx.detached,
             signal: ctx.signal,
             onOutput: (line) => ctx.emit({ kind: "output", line }),
             onHookOutput: (output) => ctx.emit({ kind: "hook", hook: name, output }),

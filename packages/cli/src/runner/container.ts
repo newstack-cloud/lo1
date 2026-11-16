@@ -34,6 +34,8 @@ export type ContainerHandle = {
   readonly running: boolean;
   stop(timeoutMs?: number): Promise<void>;
   readonly exitPromise: Promise<number | null>;
+  /** Stops following the container's logs; the container keeps running. */
+  releaseLogs(): void;
 };
 
 export type ExecFn = (
@@ -179,5 +181,6 @@ export async function startContainer(
     },
     stop,
     exitPromise,
+    releaseLogs: () => logChild.kill(),
   };
 }

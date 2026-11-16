@@ -22,7 +22,7 @@ Multi-service local development environment. Orchestrate services, infrastructur
 
 | Dependency                                    | Version | Purpose                                           |
 | --------------------------------------------- | ------- | ------------------------------------------------- |
-| [Node.js](https://nodejs.org/)                | 22+     | CLI runtime                                       |
+| [Node.js](https://nodejs.org/)                | 24+     | CLI runtime                                       |
 | [Docker](https://docs.docker.com/get-docker/) | 20.10+  | Container services, infrastructure, reverse proxy |
 | [Git](https://git-scm.com/)                   | 2.x     | Repository cloning (`lo1 init`)                   |
 

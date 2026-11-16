@@ -191,7 +191,7 @@ describe("stopWorkspace", () => {
       const deps = makeDeps();
       await stopWorkspace({ workspaceDir: "/workspace" }, deps);
 
-      const pidCall = killCalls.find((c) => c[0] === 12345);
+      const pidCall = killCalls.find((c) => Math.abs(c[0]) === 12345);
       expect(pidCall).toBeDefined();
       expect(pidCall?.[1]).toBe("SIGTERM");
     } finally {
@@ -291,7 +291,7 @@ describe("hydrateHandles", () => {
 
       await proc.stop();
 
-      expect(killCalls.find((c) => c[0] === 12345)).toBeDefined();
+      expect(killCalls.find((c) => Math.abs(c[0]) === 12345)).toBeDefined();
     } finally {
       process.kill = originalKill;
     }

@@ -172,6 +172,7 @@ export const upCommand = new Command("up")
         workspaceDir,
         serviceFilter,
         modeOverride,
+        detached,
         signal: controller.signal,
         onEvent,
       });
@@ -181,6 +182,7 @@ export const upCommand = new Command("up")
 
       if (detached) {
         result.logsHandle.kill();
+        for (const handle of result.handles) handle.detach?.();
         return;
       }
 

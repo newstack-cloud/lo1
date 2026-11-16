@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { Plugin, WorkspaceConfig, ServiceConfig, ContainerInput } from "@lo1/sdk";
 import { createLog } from "../debug";
 import { Lo1Error } from "../errors";
@@ -19,6 +19,7 @@ import {
 } from "../discovery/registry";
 import { waitForReady as defaultWaitForReady } from "../readiness/probe";
 import { projectId, networkId, readComposeHelpers } from "../compose/generate";
+import { logDir } from "../logs/writer";
 
 const debug = createLog("orchestrator");
 
@@ -38,6 +39,8 @@ export type ServiceHandle = {
   stop(timeoutMs?: number): Promise<void>;
   /** Stops following the service's output without stopping the service itself. */
   releaseLogs?(): void;
+  /** Lets lo1 exit while a host process keeps running (`lo1 up --detach`). */
+  detach?(): void;
 };
 
 /** The workspace's compose project, used to start compose-run services in their layer. */
@@ -56,6 +59,8 @@ export type StartServiceOptions = {
   pluginEnvVars: Record<string, string>;
   workspaceDir: string;
   compose?: ComposeContext;
+  /** Host processes write straight to their log file so they can outlive lo1. */
+  detached?: boolean;
   signal?: AbortSignal;
   onOutput?: (line: OutputLine) => void;
   onHookOutput?: (output: HookOutput) => void;
@@ -277,6 +282,7 @@ async function startWithContainer(
       return handle.running;
     },
     stop: (timeout) => handle.stop(timeout),
+    releaseLogs: () => handle.releaseLogs(),
   };
 }
 
@@ -297,6 +303,9 @@ function startWithProcess(
     cwd: resolve(options.workspaceDir, serviceConfig.path),
     env,
     onOutput: options.onOutput,
+    logFile: options.detached
+      ? join(logDir(options.workspaceDir), `${serviceName}.log`)
+      : undefined,
   });
 
   return {
@@ -310,6 +319,7 @@ function startWithProcess(
       stop: async (timeout) => {
         await handle.stop(timeout);
       },
+      detach: () => handle.detach(),
     },
     exited: handle.exitPromise,
   };
