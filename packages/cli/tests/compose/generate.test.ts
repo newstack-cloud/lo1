@@ -15,6 +15,8 @@ import {
   withHostGateway,
   joinWorkspaceNetwork,
   preprocessServiceComposeFiles,
+  composeHelperServices,
+  readComposeHelpers,
 } from "../../src/compose/generate";
 
 function makeConfig(
@@ -589,6 +591,59 @@ describe("preprocessServiceComposeFiles", () => {
     expect(env).not.toContain("LO1_SERVICE_API_URL=http://api:4100");
     expect(env).toContain("DEBUG=1");
     expect(env).toContain("LO1_SERVICE_NAME=web");
+    await rm(dir, { recursive: true, force: true });
+  });
+});
+
+describe("composeHelperServices", () => {
+  const managed = new Set(["web", "migrate", "api"]);
+
+  it("follows depends_on through the file's own services, in both forms", () => {
+    const doc = {
+      services: {
+        web: { depends_on: { cache: { condition: "service_started" }, migrate: {} } },
+        cache: { depends_on: ["cache-init"] },
+        "cache-init": {},
+      },
+    };
+
+    expect(composeHelperServices(doc, "web", managed)).toEqual(["cache", "cache-init"]);
+  });
+
+  it("leaves out lo1 services and services defined in other files", () => {
+    const doc = { services: { web: { depends_on: ["api", "migrate", "postgres"] }, api: {} } };
+
+    expect(composeHelperServices(doc, "web", managed)).toEqual([]);
+  });
+
+  it("stops at dependency cycles", () => {
+    const doc = {
+      services: { web: { depends_on: ["a"] }, a: { depends_on: ["b"] }, b: { depends_on: ["a"] } },
+    };
+
+    expect(composeHelperServices(doc, "web", managed)).toEqual(["a", "b"]);
+  });
+});
+
+describe("readComposeHelpers", () => {
+  it("reads helpers from the preprocessed compose file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lo1-helpers-"));
+    const webDir = join(dir, "web");
+    await mkdir(webDir);
+    await writeFile(
+      join(webDir, "compose.yaml"),
+      toYaml({
+        services: { web: { image: "web:dev", depends_on: ["cache", "migrate"] }, cache: {} },
+      }),
+    );
+    const config = makeConfig({
+      web: { path: webDir, mode: "container", compose: "compose.yaml" },
+      migrate: { mode: "container", containerImage: "migrate:dev", initTask: true },
+    });
+    await preprocessServiceComposeFiles(config, dir);
+
+    expect(await readComposeHelpers(config, dir, "web")).toEqual(["cache"]);
+    expect(await readComposeHelpers(config, dir, "migrate")).toEqual([]);
     await rm(dir, { recursive: true, force: true });
   });
 });

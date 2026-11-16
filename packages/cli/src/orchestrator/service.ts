@@ -18,7 +18,7 @@ import {
   containerFacingUrl,
 } from "../discovery/registry";
 import { waitForReady as defaultWaitForReady } from "../readiness/probe";
-import { projectId, networkId } from "../compose/generate";
+import { projectId, networkId, readComposeHelpers } from "../compose/generate";
 
 const debug = createLog("orchestrator");
 
@@ -70,6 +70,7 @@ export type StartServiceDeps = {
   executeHook: typeof defaultExecuteHook;
   buildServiceEnv: typeof defaultBuildServiceEnv;
   waitForReady: typeof defaultWaitForReady;
+  findComposeHelpers: typeof readComposeHelpers;
 };
 
 const defaultDeps: StartServiceDeps = {
@@ -81,6 +82,7 @@ const defaultDeps: StartServiceDeps = {
   executeHook: defaultExecuteHook,
   buildServiceEnv: defaultBuildServiceEnv,
   waitForReady: defaultWaitForReady,
+  findComposeHelpers: readComposeHelpers,
 };
 
 export const BUILTIN_TYPES = new Set(["service", "app"]);
@@ -330,7 +332,11 @@ async function startWithCompose(
   }
 
   const services = [serviceName];
-  await deps.composeUp({ ...compose, services, signal });
+  // Without --no-deps, compose would also start whatever the service's
+  // depends_on names, re-running lo1 services such as an init task that has
+  // already completed. Helpers from the service's own compose file still start.
+  const helpers = await deps.findComposeHelpers(options.config, options.workspaceDir, serviceName);
+  await deps.composeUp({ ...compose, services: [...services, ...helpers], noDeps: true, signal });
 
   const logs = deps.composeLogs({ ...compose, services }, (line) =>
     options.onOutput?.({

@@ -295,6 +295,7 @@ type ParsedComposeService = {
   environment?: string[] | Record<string, string | number | boolean | null>;
   extra_hosts?: ExtraHosts;
   network_mode?: string;
+  depends_on?: string[] | Record<string, unknown>;
   networks?: string[] | Record<string, unknown>;
 };
 
@@ -411,6 +412,48 @@ export async function preprocessServiceComposeFiles(
     const resolvedYaml = toYaml(doc, { noRefs: true, lineWidth: -1 });
     await writeFile(join(lo1Dir, `${name}.compose.yaml`), resolvedYaml, "utf-8");
   }
+}
+
+function dependencyNames(svc: ParsedComposeService | undefined): string[] {
+  if (!svc?.depends_on) return [];
+  return Array.isArray(svc.depends_on) ? svc.depends_on : Object.keys(svc.depends_on);
+}
+
+/**
+ * The services in a lo1 service's compose file that it depends on, directly
+ * or through each other, and that lo1 doesn't run itself. lo1 starts these
+ * alongside the service; `managed` services are left to lo1.
+ */
+export function composeHelperServices(
+  doc: ParsedComposeDoc,
+  serviceName: string,
+  managed: Set<string>,
+): string[] {
+  const services = doc.services ?? {};
+  const helpers: string[] = [];
+  const pending = dependencyNames(services[serviceName]);
+  while (pending.length > 0) {
+    const name = pending.shift()!;
+    if (name === serviceName || managed.has(name) || helpers.includes(name)) continue;
+    if (!(name in services)) continue;
+    helpers.push(name);
+    pending.push(...dependencyNames(services[name]));
+  }
+  return helpers;
+}
+
+/** Reads the helper services of a lo1 service from its preprocessed compose file. */
+export async function readComposeHelpers(
+  config: WorkspaceConfig,
+  workspaceDir: string,
+  serviceName: string,
+): Promise<string[]> {
+  const service = config.services[serviceName];
+  if (!service?.compose) return [];
+
+  const raw = await readFile(join(workspaceDir, ".lo1", `${serviceName}.compose.yaml`), "utf-8");
+  const doc = parseYaml(raw) as ParsedComposeDoc;
+  return composeHelperServices(doc, serviceName, new Set(Object.keys(config.services)));
 }
 
 /**
