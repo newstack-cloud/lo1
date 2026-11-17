@@ -41,6 +41,7 @@ function makeDeps(overrides: Partial<StopDeps> = {}): StopDeps {
     ),
     readState: mock(() => Promise.resolve(sampleState)),
     removeState: mock(() => Promise.resolve()),
+    removeNetwork: mock(() => Promise.resolve()),
     exec: mock(() => Promise.resolve({ stdout: "", stderr: "" })),
     ...overrides,
   };
@@ -276,6 +277,17 @@ describe("stopWorkspace", () => {
     const callArgs = (deps.composeDown as ReturnType<typeof mock>).mock.calls[0][0];
     expect(callArgs.projectName).toBe("lo1-my-platform");
     expect(callArgs.fileArgs).toEqual([".lo1/docker-compose.yml"]);
+  });
+
+  it("should remove the workspace network after compose down", async () => {
+    const deps = makeDeps();
+
+    await stopWorkspace({ workspaceDir: "/workspace" }, deps);
+
+    expect(deps.removeNetwork).toHaveBeenCalledWith(
+      sampleState.projectName,
+      `lo1-${sampleState.workspaceName}-network`,
+    );
   });
 
   it("should remove state file after shutdown", async () => {

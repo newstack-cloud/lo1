@@ -6,7 +6,8 @@ import type { WorkspaceConfig } from "@lo1/sdk";
 import { createLog } from "../debug";
 import { loadWorkspaceConfig } from "../config/loader";
 import { buildEndpointRegistry, buildServiceEnv } from "../discovery/registry";
-import { composeDown } from "../runner/compose";
+import { composeDown, removeComposeNetwork } from "../runner/compose";
+import { networkId } from "../compose/generate";
 import { signalProcessTree } from "../runner/process";
 import { executeHook } from "../hooks/executor";
 import { readState as defaultReadState, removeState as defaultRemoveState } from "./state";
@@ -28,6 +29,7 @@ export type StopDeps = Pick<
   "loadConfig" | "composeDown" | "executeHook" | "readState" | "removeState"
 > & {
   exec?: (cmd: string, args: string[]) => Promise<{ stdout: string; stderr: string }>;
+  removeNetwork: (projectName: string, networkKey: string) => Promise<void>;
 };
 
 function createDefaultStopDeps(): StopDeps {
@@ -38,6 +40,7 @@ function createDefaultStopDeps(): StopDeps {
     readState: defaultReadState,
     removeState: defaultRemoveState,
     exec: defaultExec,
+    removeNetwork: (project, key) => removeComposeNetwork(project, key),
   };
 }
 
@@ -248,6 +251,7 @@ export async function stopWorkspace(
     cwd: state.workspaceDir,
     clean: options.clean,
   });
+  await deps.removeNetwork(state.projectName, networkId(state.workspaceName));
 
   await deps.removeState(workspaceDir);
   emit({ kind: "phase", phase: "Stopped" });

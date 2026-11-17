@@ -84,6 +84,7 @@ function makeDeps(overrides: Partial<OrchestratorDeps> = {}): OrchestratorDeps {
     composeLogs: mock(() => ({ kill: mock(() => {}) })),
     discoverExtraComposeServices: mock(() => Promise.resolve([])),
     composeDown: mock(() => Promise.resolve()),
+    ensureNetwork: mock(() => Promise.resolve()),
     composePs: mock(() => Promise.resolve([])),
     startService: mock((opts) =>
       Promise.resolve({
@@ -407,6 +408,16 @@ describe("startWorkspace", () => {
 
     expect(deps.composeUp).not.toHaveBeenCalled();
     expect(deps.composeWait).not.toHaveBeenCalled();
+    // Plugin containers still need the workspace network.
+    expect(deps.ensureNetwork).toHaveBeenCalledWith("lo1-my-platform", "lo1-my-platform-network");
+  });
+
+  it("should leave creating the network to compose when infrastructure starts", async () => {
+    const deps = makeDeps();
+
+    await startWorkspace({}, deps);
+
+    expect(deps.ensureNetwork).not.toHaveBeenCalled();
   });
 
   it("should write initial state after infra and update after services", async () => {

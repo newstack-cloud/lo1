@@ -52,6 +52,8 @@ export type OrchestratorDeps = {
   ) => ComposeLogsHandle;
   discoverExtraComposeServices: (path: string, workspaceDir?: string) => Promise<string[]>;
   composeDown: (options: ComposeExecOptions & { clean?: boolean }) => Promise<void>;
+  /** Creates the workspace network when no compose service will create it. */
+  ensureNetwork: (projectName: string, networkKey: string) => Promise<void>;
   composePs: (options: ComposeExecOptions) => Promise<ComposeServiceStatus[]>;
   startService: (options: StartServiceOptions) => Promise<ServiceHandle>;
   executeHook: (
