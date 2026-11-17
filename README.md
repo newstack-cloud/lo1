@@ -1,5 +1,3 @@
-
-
 ![lo1](/resources/logo.svg)
 
 Your whole system, running locally
@@ -17,7 +15,7 @@ Multi-service local development environment. Orchestrate services, infrastructur
 
 > `lo` = loopback interface, `1` from `::1` (IPv6 loopback)
 
-https://github.com/user-attachments/assets/d7292f70-e974-4dd0-bea6-5e6998d77f24
+https://github.com/user-attachments/assets/18325dca-ee9c-4f96-ae31-9b5c759e6f2b
 
 ## Packages
 
