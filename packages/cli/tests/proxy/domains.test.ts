@@ -21,6 +21,19 @@ function makeConfig(
 }
 
 describe("collectDomains", () => {
+  it("should return no domains when the proxy is disabled, so lo1 leaves the hosts file alone", () => {
+    const config = {
+      version: "1",
+      name: "shop",
+      proxy: { enabled: false, port: 80, tld: "local" },
+      services: {
+        api: { type: "service", path: "./api", port: 3000, mode: "dev", dependsOn: [], initTask: false },
+      },
+    } as unknown as Parameters<typeof collectDomains>[0];
+
+    expect(collectDomains(config)).toEqual([]);
+  });
+
   it("should return subdomain for each service with a port", () => {
     const config = makeConfig({
       api: { port: 3000 },
