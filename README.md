@@ -1,4 +1,9 @@
-# lo1
+![lo1](/resources/logo.svg)
+
+Your whole system, running locally
+
+- [Contributing](./CONTRIBUTING.md)
+- [Docs Site](https://lo1.dev)
 
 [![CI](https://github.com/newstack-cloud/lo1/actions/workflows/ci.yml/badge.svg)](https://github.com/newstack-cloud/lo1/actions/workflows/ci.yml)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=newstack-cloud_lo1&metric=coverage)](https://sonarcloud.io/summary/new_code?id=newstack-cloud_lo1)
@@ -30,12 +35,14 @@ Docker Compose v2 is included with Docker Desktop (macOS/Windows) and modern Doc
 
 ## Quick Start
 
+lo1 runs on Node.js 24 or later. You can install it with npm, pnpm, Yarn or Bun, but Node.js is still needed: the `lo1` command runs on Node whichever package manager installed it.
+
 ```bash
 # Install globally (pick your package manager)
-bun install -g @lo1/cli   # Bun
 npm install -g @lo1/cli    # npm
-yarn global add @lo1/cli   # Yarn
 pnpm add -g @lo1/cli       # pnpm
+yarn global add @lo1/cli   # Yarn
+bun install -g @lo1/cli    # Bun
 
 # Initialize a workspace (clones repositories, sets up infrastructure)
 lo1 init
