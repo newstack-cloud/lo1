@@ -1,4 +1,8 @@
 [test]
+# The examples are separate Node projects with their own `npm test` (the shop
+# API's tests need the Postgres that `npm test` starts), so `bun test` at the
+# repository root leaves them out. Needs Bun 1.4 or later.
+pathIgnorePatterns = ["examples/**"]
 coverageSkipTestFiles = true
 coverageReporter = ["text", "lcov"]
 coveragePathIgnorePatterns = [
