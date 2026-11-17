@@ -151,6 +151,30 @@ function untrackedProcessHandles(
   );
 }
 
+type StopServicesContext = Omit<ServicePreStopContext, "handle" | "config"> & {
+  config: WorkspaceConfig | null;
+};
+
+/** Stops each service, running its preStop hook first while it is still running. */
+async function stopServiceHandles(
+  handles: ServiceHandle[],
+  ctx: StopServicesContext,
+): Promise<void> {
+  if (handles.length === 0) return;
+
+  ctx.emit({ kind: "phase", phase: "Stopping services" });
+  for (const handle of handles) {
+    // Finished init tasks and replaced processes have nothing left to stop.
+    if (handle.type === "process" && !handle.running) continue;
+    ctx.emit({ kind: "service", service: handle.serviceName, status: "stopping" });
+    if (ctx.config && handle.running) {
+      await runServicePreStop({ ...ctx, handle, config: ctx.config });
+    }
+    await handle.stop();
+    ctx.emit({ kind: "service", service: handle.serviceName, status: "stopped" });
+  }
+}
+
 export async function stopWorkspace(
   options: StopOptions,
   overrides: Partial<StopDeps> = {},
@@ -167,12 +191,7 @@ export async function stopWorkspace(
     return;
   }
 
-  let config;
-  try {
-    config = await deps.loadConfig();
-  } catch {
-    config = null;
-  }
+  const config = await deps.loadConfig().catch(() => null);
 
   if (config?.hooks?.preStop) {
     emit({ kind: "phase", phase: "Running preStop hook" });
@@ -189,26 +208,13 @@ export async function stopWorkspace(
     : hydrateHandles(state, deps.exec);
   debug("stopWorkspace: %d handles to stop", handles.length);
 
-  if (handles.length > 0) {
-    emit({ kind: "phase", phase: "Stopping services" });
-    for (const handle of handles) {
-      // Finished init tasks and replaced processes have nothing left to stop.
-      if (handle.type === "process" && !handle.running) continue;
-      emit({ kind: "service", service: handle.serviceName, status: "stopping" });
-      if (config && handle.running) {
-        await runServicePreStop({
-          handle,
-          config,
-          workspaceDir,
-          executeHook: deps.executeHook,
-          emit,
-          signal: options.signal,
-        });
-      }
-      await handle.stop();
-      emit({ kind: "service", service: handle.serviceName, status: "stopped" });
-    }
-  }
+  await stopServiceHandles(handles, {
+    config,
+    workspaceDir,
+    executeHook: deps.executeHook,
+    emit,
+    signal: options.signal,
+  });
 
   const phase = options.clean
     ? "Removing infrastructure (volumes + orphans)"
