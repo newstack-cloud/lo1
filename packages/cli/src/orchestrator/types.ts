@@ -136,4 +136,10 @@ export type WorkspaceState = {
   pluginEnvVars?: Record<string, string>;
   /** The `lo1 up --mode` override, so a restart runs the service the same way. */
   modeOverride?: "dev" | "container";
+  /** False while `lo1 up` is still starting; true once every service is ready. */
+  ready?: boolean;
+  /** The infrastructure services lo1 started (plugins, extraCompose, proxy). */
+  infraServices?: string[];
+  /** Infrastructure init tasks, which are done once they exit 0. */
+  infraInitTasks?: string[];
 };

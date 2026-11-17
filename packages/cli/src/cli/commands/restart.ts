@@ -80,8 +80,10 @@ export const restartCommand = new Command("restart")
 
     // Held from reading the state to writing it, so concurrent restarts
     // can't overwrite each other's process ids.
-    await withWorkspaceLock(workspaceDir, () =>
-      restartServices(names, workspaceDir, controller.signal),
+    await withWorkspaceLock(
+      workspaceDir,
+      () => restartServices(names, workspaceDir, controller.signal),
+      { signal: controller.signal },
     );
   });
 

@@ -1,8 +1,8 @@
 import { describe, it, expect } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { lockPath, withWorkspaceLock } from "../../src/orchestrator/lock";
+import { lockPath, removeStaleLock, withWorkspaceLock } from "../../src/orchestrator/lock";
 
 async function withTempDir(fn: (dir: string) => Promise<void>) {
   const dir = await mkdtemp(join(tmpdir(), "lo1-lock-"));
@@ -72,5 +72,47 @@ describe("withWorkspaceLock", () => {
       });
 
       await expect(attempt).rejects.toThrow("Another lo1 command (pid 4242)");
+    }));
+
+  it("stops waiting when its signal aborts", () =>
+    withTempDir(async (dir) => {
+      await mkdir(join(dir, ".lo1"), { recursive: true });
+      await writeFile(lockPath(dir), "4242");
+      const controller = new AbortController();
+
+      const attempt = withWorkspaceLock(dir, async () => "ran", {
+        isAlive: () => true,
+        pollMs: 5,
+        signal: controller.signal,
+      });
+      setTimeout(() => controller.abort(), 20);
+
+      await expect(attempt).rejects.toThrow("Stopped waiting for the workspace lock.");
+    }));
+
+  it("removes a stale lock, but not a lock that has replaced it since it was checked", () =>
+    withTempDir(async (dir) => {
+      await mkdir(join(dir, ".lo1"), { recursive: true });
+      // Holder 111 was found stale, but 222 took the lock before the removal.
+      await writeFile(lockPath(dir), "222");
+
+      await removeStaleLock(lockPath(dir), "111");
+      const kept = await readFile(lockPath(dir), "utf-8");
+      await removeStaleLock(lockPath(dir), "222");
+
+      expect(kept).toBe("222");
+      await expect(readFile(lockPath(dir), "utf-8")).rejects.toThrow();
+      expect((await readdir(join(dir, ".lo1"))).length).toBe(0);
+    }));
+
+  it("propagates errors reading the lock other than it being missing", () =>
+    withTempDir(async (dir) => {
+      // A directory where the lock file should be makes linking fail with EEXIST
+      // and reading it fail with EISDIR.
+      await mkdir(lockPath(dir), { recursive: true });
+
+      await expect(withWorkspaceLock(dir, async () => "ran", { timeoutMs: 50 })).rejects.toThrow(
+        /EISDIR/,
+      );
     }));
 });

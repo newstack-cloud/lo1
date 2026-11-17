@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { platform } from "node:os";
 import { buildServiceState, startWorkspace } from "../../orchestrator/start";
 import { hydrateHandles, stopWorkspace } from "../../orchestrator/stop";
-import { watchPluginServices } from "../../orchestrator/watch";
+import { watchPluginServices, type WatchHandle } from "../../orchestrator/watch";
 import { withWorkspaceLock } from "../../orchestrator/lock";
 import { readState, writeState } from "../../orchestrator/state";
 import { startService, type ServiceHandle } from "../../orchestrator/service";
@@ -179,6 +179,45 @@ export async function recordReplacement(
   );
 }
 
+/**
+ * Follows plugins' watchForChanges() in a foreground `lo1 up`. The workspace
+ * is already up when this runs, so a watcher that fails to start is reported
+ * and the workspace keeps running without it.
+ */
+export function startWatching(
+  result: Awaited<ReturnType<typeof startWorkspace>>,
+  workspaceDir: string,
+  signal: AbortSignal,
+  onEvent: (event: OrchestratorEvent) => void,
+): WatchHandle | undefined {
+  try {
+    return watchPluginServices(
+      result.handles,
+      {
+        config: result.config,
+        workspaceDir,
+        registry: result.registry,
+        plugins: result.plugins,
+        pluginEnvVars: result.pluginEnvVars,
+        compose: result.compose,
+        detached: false,
+        signal,
+        emit: onEvent,
+        deps: { startService, executeHook },
+      },
+      {
+        runExclusive: (fn) => withWorkspaceLock(workspaceDir, fn, { signal }),
+        onReplaced: (handle) => recordReplacement(workspaceDir, handle),
+        recordedHandle: (name) => recordedHandle(workspaceDir, name),
+      },
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    onEvent({ kind: "error", message: `Watching for changes failed to start: ${message}` });
+    return undefined;
+  }
+}
+
 export const upCommand = new Command("up")
   .description("Start all services and infrastructure")
   .option("--services <names>", "Comma-separated list of services to start")
@@ -248,29 +287,10 @@ export const upCommand = new Command("up")
         return;
       }
 
-      const watcher = watchPluginServices(
-        result.handles,
-        {
-          config: result.config,
-          workspaceDir,
-          registry: result.registry,
-          plugins: result.plugins,
-          pluginEnvVars: result.pluginEnvVars,
-          compose: result.compose,
-          detached: false,
-          signal: controller.signal,
-          emit: onEvent,
-          deps: { startService, executeHook },
-        },
-        {
-          runExclusive: (fn) => withWorkspaceLock(workspaceDir, fn),
-          onReplaced: (handle) => recordReplacement(workspaceDir, handle),
-          recordedHandle: (name) => recordedHandle(workspaceDir, name),
-        },
-      );
+      const watcher = startWatching(result, workspaceDir, controller.signal, onEvent);
       await waitForShutdownSignal(controller);
       // Let a restart under way finish, so teardown sees its new process.
-      await watcher.stop();
+      await watcher?.stop();
     } catch (err) {
       if (!controller.signal.aborted) {
         startupError = err;

@@ -5,6 +5,7 @@ import { readState } from "../../orchestrator/state";
 import { loadWorkspaceConfig } from "../../config/loader";
 import { composePs, type ComposeServiceStatus } from "../../runner/compose";
 import { serviceUrl } from "../../proxy/domains";
+import { applyModeOverride } from "../../orchestrator/start";
 import type { ServiceState, WorkspaceState } from "../../orchestrator/types";
 import type { WorkspaceConfig } from "@lo1/sdk";
 
@@ -43,32 +44,45 @@ export type StatusResult = {
 /** Exit codes for `lo1 status`, which agents and scripts rely on. */
 export const STATUS_EXIT = { healthy: 0, unhealthy: 1, notRunning: 2 } as const;
 
-function isSettled(s: ComposeServiceStatus): boolean {
-  if (s.State === "exited") return s.ExitCode === 0;
+/** What `lo1 status` knows about the infrastructure lo1 started. */
+export type InfraExpectation = {
+  /** The infrastructure services lo1 started; undefined for state from older lo1 versions. */
+  services?: string[];
+  /** Infrastructure init tasks, which are done once they exit 0. */
+  initTasks: string[];
+};
+
+function isSettled(s: ComposeServiceStatus, initTasks: Set<string>): boolean {
+  // Only an init task is done when it has exited; stopped infrastructure is not.
+  if (s.State === "exited") return initTasks.has(s.Service) && s.ExitCode === 0;
   return s.State === "running" && (s.Health === "healthy" || s.Health === "");
 }
 
-function expectsInfrastructure(config: WorkspaceConfig | null): boolean {
+function hasFailed(s: ComposeServiceStatus, initTasks: Set<string>): boolean {
+  if (s.Health === "unhealthy" || s.State === "dead") return true;
+  return s.State === "exited" && !(initTasks.has(s.Service) && s.ExitCode === 0);
+}
+
+/** Older state files don't list the infrastructure, so fall back to what the config implies. */
+function expectsInfrastructure(expected: InfraExpectation, config: WorkspaceConfig | null) {
+  if (expected.services) return expected.services.length > 0;
   if (!config) return true;
-  return (
-    config.proxy?.enabled !== false ||
-    config.extraCompose !== undefined ||
-    Object.keys(config.plugins ?? {}).length > 0
-  );
+  return config.proxy?.enabled !== false || config.extraCompose !== undefined;
 }
 
 export function deriveInfraState(
   statuses: ComposeServiceStatus[],
+  expected: InfraExpectation,
   config: WorkspaceConfig | null,
 ): InfrastructureState {
-  if (statuses.length === 0) return expectsInfrastructure(config) ? "down" : "none";
+  if (statuses.length === 0) return expectsInfrastructure(expected, config) ? "down" : "none";
 
-  // An infrastructure init task that exited 0 has done its job.
-  if (statuses.every(isSettled)) return "healthy";
+  const initTasks = new Set(expected.initTasks);
+  const seen = new Set(statuses.map((s) => s.Service));
+  const missing = (expected.services ?? []).some((name) => !seen.has(name));
+  if (!missing && statuses.every((s) => isSettled(s, initTasks))) return "healthy";
 
-  const anyFailed = statuses.some(
-    (s) => s.Health === "unhealthy" || (s.State === "exited" && s.ExitCode !== 0),
-  );
+  const anyFailed = missing || statuses.some((s) => hasFailed(s, initTasks));
   return anyFailed ? "degraded" : "starting";
 }
 
@@ -117,7 +131,9 @@ export async function getWorkspaceStatus(
   const state = await deps.readState(workspaceDir);
   if (!state) return null;
 
-  const config = await loadConfigOrNull(deps);
+  // Status describes the workspace as `lo1 up --mode` started it.
+  const loaded = await loadConfigOrNull(deps);
+  const config = loaded && applyModeOverride(loaded, state.modeOverride);
   const statuses = await deps.composePs({
     projectName: state.projectName,
     fileArgs: state.fileArgs,
@@ -152,8 +168,12 @@ export async function getWorkspaceStatus(
   }
 
   const infraStatuses = statuses.filter((s) => !(s.Service in state.services));
-  const infraState = deriveInfraState(infraStatuses, config);
+  const expected = { services: state.infraServices, initTasks: state.infraInitTasks ?? [] };
+  const infraState = deriveInfraState(infraStatuses, expected, config);
+  // Until lo1 up has started every service, the state file lists only some of them.
+  const startupDone = state.ready !== false;
   const healthy =
+    startupDone &&
     services.every((s) => s.state === "running") &&
     (infraState === "healthy" || infraState === "none");
 

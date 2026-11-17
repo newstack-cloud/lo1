@@ -415,6 +415,21 @@ describe("hydrateHandles", () => {
       await rm(dir, { recursive: true, force: true });
     });
 
+    /** Waits for the shell to write the child's pid, failing on anything but a missing file. */
+    async function readPidFile(path: string, timeoutMs = 3000): Promise<number> {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const content = await readFile(path, "utf-8").catch((err: NodeJS.ErrnoException) => {
+          if (err.code === "ENOENT") return "";
+          throw err;
+        });
+        const pid = Number.parseInt(content.trim(), 10);
+        if (Number.isInteger(pid) && pid > 0) return pid;
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      throw new Error(`No pid in ${path} after ${timeoutMs}ms`);
+    }
+
     it.skipIf(platform() === "win32")(
       "should kill children that outlive their parent's exit",
       async () => {
@@ -422,21 +437,24 @@ describe("hydrateHandles", () => {
           "(trap '' TERM; while true; do sleep 0.1; done) & echo $! > child.pid; " +
             "trap 'exit 0' TERM; while true; do sleep 0.1; done",
         );
-        const childPid = Number.parseInt(await readFile(join(dir, "child.pid"), "utf-8"), 10);
+        try {
+          const childPid = await readPidFile(join(dir, "child.pid"));
 
-        await handle.stop(500);
-        await new Promise((r) => setTimeout(r, 100));
+          await handle.stop(500);
 
-        expect(isAlive(childPid)).toBe(false);
-        await rm(dir, { recursive: true, force: true });
+          expect(isAlive(childPid)).toBe(false);
+        } finally {
+          await handle.stop(500);
+          await rm(dir, { recursive: true, force: true });
+        }
       },
     );
 
     it.skipIf(platform() === "win32")("should kill a process that ignores SIGTERM", async () => {
       const { dir, pid, handle } = await startDetached("trap '' TERM; while true; do sleep 0.1; done");
 
+      // stop() waits for the SIGKILL to take effect, so no extra delay is needed.
       await handle.stop(300);
-      await new Promise((r) => setTimeout(r, 100));
 
       expect(isAlive(pid)).toBe(false);
       await rm(dir, { recursive: true, force: true });
