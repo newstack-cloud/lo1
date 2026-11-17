@@ -38,7 +38,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
+          node-version: 24
           registry-url: https://registry.npmjs.org
+
+      # Trusted publishing (OIDC) needs npm 11.5.1 or later.
+      - name: Update npm
+        run: npm install -g npm@latest && npm --version
 
       - uses: oven-sh/setup-bun@v2
 
@@ -63,12 +68,18 @@ jobs:
             mv "$tmp" "$pkg/package.json"
           done
 
+      # Uses npm trusted publishing: npm swaps this job's OIDC token
+      # (id-token: write) for a short-lived publish token, so no npm token is
+      # stored or needed. A version that's already on npm is skipped, so a
+      # failed release can be finished with a publish-only run.
       - name: Publish packages
         run: |
           for pkg in packages/sdk packages/cli plugins/celerity; do
-            cd "$pkg"
-            bunx npm publish --access public --provenance
-            cd -
+            name=$(jq -r .name "$pkg/package.json")
+            version=$(jq -r .version "$pkg/package.json")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already on npm, skipping"
+              continue
+            fi
+            (cd "$pkg" && npm publish --access public --provenance)
           done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
