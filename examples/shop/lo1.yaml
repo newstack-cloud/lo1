@@ -14,36 +14,36 @@ services:
   migrate:
     type: service
     path: ./api
-    command: npm install --no-audit --no-fund --loglevel=error && node migrate.js
+    command: npm install --no-audit --no-fund --loglevel=error && node src/migrate.js
     initTask: true
-    env:
+    # Defined once here and reused below with *database.
+    env: &database
       DATABASE_URL: postgres://shop:shop@localhost:54329/shop
 
   seed:
     type: service
     path: ./api
-    command: node seed.js
+    command: node src/seed.js
     initTask: true
     dependsOn: [migrate]
-    env:
-      DATABASE_URL: postgres://shop:shop@localhost:54329/shop
+    env: *database
 
   api:
     type: service
     path: ./api
     port: 4100
-    command: node server.js
+    command: node src/server.js
     readinessProbe: http://localhost:4100/health
     dependsOn: [seed]
     env:
+      <<: *database
       PORT: "4100"
-      DATABASE_URL: postgres://shop:shop@localhost:54329/shop
 
   web:
     type: app
     path: ./web
     port: 4200
-    command: node server.js
+    command: node src/server.js
     dependsOn: [api]
     env:
       PORT: "4200"
