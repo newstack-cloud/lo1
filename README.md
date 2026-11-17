@@ -1,3 +1,5 @@
+
+
 ![lo1](/resources/logo.svg)
 
 Your whole system, running locally
@@ -14,6 +16,8 @@ Your whole system, running locally
 Multi-service local development environment. Orchestrate services, infrastructure, and reverse proxying with a single `lo1 up`.
 
 > `lo` = loopback interface, `1` from `::1` (IPv6 loopback)
+
+https://github.com/user-attachments/assets/d7292f70-e974-4dd0-bea6-5e6998d77f24
 
 ## Packages
 
