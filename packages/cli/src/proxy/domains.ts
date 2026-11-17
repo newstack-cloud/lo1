@@ -4,7 +4,12 @@ import type { WorkspaceConfig } from "@lo1/sdk";
  * Collects all proxy domains from workspace config.
  * Used by Caddyfile generation, hosts management, and TLS setup.
  */
+/**
+ * The domains the proxy serves, which lo1 puts in the hosts file. With the
+ * proxy disabled there are none, so lo1 needs no sudo for the hosts file.
+ */
 export function collectDomains(config: WorkspaceConfig): string[] {
+  if (config.proxy?.enabled === false) return [];
   const tld = config.proxy?.tld ?? "local";
   const baseDomain = `${config.name}.${tld}`;
   const domains = new Set<string>();

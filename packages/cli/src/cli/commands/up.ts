@@ -83,7 +83,8 @@ async function acquireSudo(): Promise<void> {
   const config = await loadWorkspaceConfig();
   const domains = collectDomains(config);
   const needsHosts = domains.length > 0;
-  const needsTls = config.proxy?.tls?.enabled && platform() === "linux";
+  const needsTls =
+    config.proxy?.enabled !== false && config.proxy?.tls?.enabled && platform() === "linux";
 
   if (!needsHosts && !needsTls) return;
 
