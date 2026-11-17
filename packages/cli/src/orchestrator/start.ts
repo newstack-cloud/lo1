@@ -16,6 +16,7 @@ import {
   discoverExtraComposeServices,
   extraComposeFile,
   extraComposeInitTasks,
+  networkId,
 } from "../compose/generate";
 import { generateCaddyfile, writeCaddyfile, type CaddyfileResult } from "../proxy/caddyfile";
 import { generateHostsBlock, applyHosts } from "../hosts/index";
@@ -97,6 +98,8 @@ function createDefaultDeps(): OrchestratorDeps {
     composeLogs,
     discoverExtraComposeServices,
     composeDown: (opts) => import("../runner/compose").then((m) => m.composeDown(opts)),
+    ensureNetwork: (project, key) =>
+      import("../runner/compose").then((m) => m.ensureComposeNetwork(project, key)),
     composePs: (opts) => import("../runner/compose").then((m) => m.composePs(opts)),
     startService: defaultStartService,
     executeHook,
@@ -156,6 +159,11 @@ export async function startWorkspace(
     options,
     emit,
   );
+
+  // With no infrastructure, nothing has created the network plugin containers join.
+  if (composeResult.infraServices.length === 0) {
+    await deps.ensureNetwork(composeResult.projectName, networkId(config.name));
+  }
 
   if (config.proxy?.tls?.enabled && caddyResult.internalDomains.length > 0) {
     debug("startWorkspace: trusting Caddy CA for %d domain(s)", caddyResult.internalDomains.length);

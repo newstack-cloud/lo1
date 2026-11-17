@@ -337,3 +337,58 @@ export async function composePs(
     .filter((line) => line.trim())
     .map((line) => JSON.parse(line) as ComposeServiceStatus);
 }
+
+/**
+ * Creates the project's network as Compose would, labelled so Compose adopts
+ * it and `compose down` removes it. Containers lo1 starts with `docker run`
+ * (plugin containers) join this network, which otherwise only exists once
+ * Compose has started a service.
+ */
+export async function ensureComposeNetwork(
+  projectName: string,
+  networkKey: string,
+  exec: ExecFn = defaultExec,
+): Promise<void> {
+  const name = `${projectName}_${networkKey}`;
+  try {
+    await exec("docker", ["network", "inspect", name]);
+    return;
+  } catch {
+    // Not created yet.
+  }
+
+  debug("ensureComposeNetwork: creating %s", name);
+  try {
+    await exec("docker", [
+      "network",
+      "create",
+      "--driver",
+      "bridge",
+      "--label",
+      `com.docker.compose.project=${projectName}`,
+      "--label",
+      `com.docker.compose.network=${networkKey}`,
+      name,
+    ]);
+  } catch (err) {
+    const stderr = err instanceof Error && "stderr" in err ? String(err.stderr) : undefined;
+    throw new ComposeExecError(`Could not create the Docker network ${name}`, stderr);
+  }
+}
+
+/**
+ * Removes the workspace network if it is still there. `compose down` only
+ * removes networks when the project has services, so a network
+ * ensureComposeNetwork created for plugin containers would otherwise stay.
+ */
+export async function removeComposeNetwork(
+  projectName: string,
+  networkKey: string,
+  exec: ExecFn = defaultExec,
+): Promise<void> {
+  try {
+    await exec("docker", ["network", "rm", `${projectName}_${networkKey}`]);
+  } catch {
+    // Already removed by compose down, or never created.
+  }
+}

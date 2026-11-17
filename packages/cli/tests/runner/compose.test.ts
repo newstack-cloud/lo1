@@ -2,6 +2,8 @@ import { describe, it, expect, mock, beforeEach } from "bun:test";
 import { EventEmitter } from "node:events";
 import {
   composeUp,
+  ensureComposeNetwork,
+  removeComposeNetwork,
   composeWait,
   composeLogs,
   composeDown,
@@ -557,5 +559,55 @@ describe("composeWait", () => {
     );
 
     expect(waitExec).toHaveBeenCalled();
+  });
+});
+
+describe("ensureComposeNetwork", () => {
+  it("creates the network with compose's labels when it doesn't exist", async () => {
+    const exec = mock<ExecFn>((_cmd, args) =>
+      args[1] === "inspect"
+        ? Promise.reject(new Error("No such network"))
+        : Promise.resolve({ stdout: "", stderr: "" }),
+    );
+
+    await ensureComposeNetwork("lo1-shop", "lo1-shop-network", exec);
+
+    expect(exec.mock.calls[1][1]).toEqual([
+      "network",
+      "create",
+      "--driver",
+      "bridge",
+      "--label",
+      "com.docker.compose.project=lo1-shop",
+      "--label",
+      "com.docker.compose.network=lo1-shop-network",
+      "lo1-shop_lo1-shop-network",
+    ]);
+  });
+
+  it("leaves an existing network alone", async () => {
+    const exec = mock<ExecFn>(() => Promise.resolve({ stdout: "[]", stderr: "" }));
+
+    await ensureComposeNetwork("lo1-shop", "lo1-shop-network", exec);
+
+    expect(exec).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws a ComposeExecError when docker can't create it", async () => {
+    const exec = mock<ExecFn>(() => Promise.reject(new Error("daemon down")));
+
+    await expect(ensureComposeNetwork("lo1-shop", "lo1-shop-network", exec)).rejects.toThrow(
+      "Could not create the Docker network lo1-shop_lo1-shop-network",
+    );
+  });
+});
+
+describe("removeComposeNetwork", () => {
+  it("removes the network, and doesn't mind when it's already gone", async () => {
+    const exec = mock<ExecFn>(() => Promise.reject(new Error("network not found")));
+
+    await removeComposeNetwork("lo1-shop", "lo1-shop-network", exec);
+
+    expect(exec.mock.calls[0][1]).toEqual(["network", "rm", "lo1-shop_lo1-shop-network"]);
   });
 });
