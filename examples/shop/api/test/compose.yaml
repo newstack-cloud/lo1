@@ -1,0 +1,21 @@
+# A throwaway Postgres for the API's integration tests, separate from the lo1
+# workspace so tests can run with or without `lo1 up`. Data lives in memory
+# (tmpfs), so every `npm run test:db:down` starts the next run from nothing.
+name: shop-api-test
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+      POSTGRES_DB: shop_test
+    ports:
+      # Not 54329, which the workspace's own Postgres uses.
+      - "54330:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "shop", "-d", "shop_test"]
+      interval: 1s
+      retries: 30
