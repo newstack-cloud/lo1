@@ -79,13 +79,40 @@ describe("restartService", () => {
   });
 
   it("should remove an exited container before starting its replacement", async () => {
-    const { ctx, events } = makeContext();
-    const exited = makeHandle("orders", { type: "container", running: false });
+    const calls: string[] = [];
+    const withPreStop: WorkspaceConfig = {
+      ...config,
+      services: {
+        ...config.services,
+        orders: service({ type: "celerity", mode: "container", hooks: { preStop: "./drain.sh" } }),
+      },
+    };
+    const { ctx, events } = makeContext({
+      config: withPreStop,
+      deps: {
+        startService: mock((opts) => {
+          calls.push("start");
+          return Promise.resolve(makeHandle(opts.serviceName, { type: "container", pid: undefined }));
+        }),
+        executeHook: mock((name) => {
+          calls.push(`hook:${name}`);
+          return Promise.resolve({ exitCode: 0, hookName: name });
+        }),
+      },
+    });
+    const exited = makeHandle("orders", {
+      type: "container",
+      running: false,
+      stop: mock(async () => {
+        calls.push("stop");
+      }),
+    });
 
     await restartService("orders", exited, ctx);
 
-    expect(exited.stop).toHaveBeenCalled();
-    expect(ctx.deps.executeHook).not.toHaveBeenCalled();
+    // The old container is removed first, so its name is free for the new one,
+    // and a container that has already exited gets no preStop hook.
+    expect(calls).toEqual(["stop", "start"]);
     expect(statuses(events)).toEqual(["starting", "started"]);
   });
 
