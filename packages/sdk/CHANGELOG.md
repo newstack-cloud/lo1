@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0](https://github.com/newstack-cloud/lo1/compare/sdk/v0.4.0...sdk/v0.5.0) (2026-11-17)
+
+
+### Features
+
+* **cli:** add lo1 restart and follow plugin watchForChanges ([53cccf4](https://github.com/newstack-cloud/lo1/commit/53cccf4bd06f7baa8a51f822b5836d57b02aea67))
+
+
+### Bug Fixes
+
+* **cli:** stop compose from re-running lo1 services a compose service depends on ([64505ac](https://github.com/newstack-cloud/lo1/commit/64505ac863461182c677f7c1da8c129e8155cef8))
+
+
+### Dependencies
+
+* **repo:** fix high severity audit findings ([92c4001](https://github.com/newstack-cloud/lo1/commit/92c400143f2c11f536005f8cd58ec6763887bdbf))
+
 ## [0.4.0](https://github.com/newstack-cloud/lo1/compare/sdk/v0.3.0...sdk/v0.4.0) (2026-08-24)
 
 
