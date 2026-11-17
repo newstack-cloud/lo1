@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.5.0](https://github.com/newstack-cloud/lo1/compare/cli/v0.4.0...cli/v0.5.0) (2026-11-17)
+
+
+### Features
+
+* **cli:** add lo1 doctor and fail lo1 up early on port conflicts ([e7d3f68](https://github.com/newstack-cloud/lo1/commit/e7d3f6816bdc143d507f55a5756cc5b028268ff8))
+* **cli:** add lo1 restart and follow plugin watchForChanges ([53cccf4](https://github.com/newstack-cloud/lo1/commit/53cccf4bd06f7baa8a51f822b5836d57b02aea67))
+* **cli:** detach dev processes, load the workspace .env, require Node 24 ([2f3cd1d](https://github.com/newstack-cloud/lo1/commit/2f3cd1d454f15ccf936085671e861e2257b078cc))
+* **cli:** make lo1 up and lo1 status dependable for scripts and agents ([6f8cadb](https://github.com/newstack-cloud/lo1/commit/6f8cadb2aec17cd28fc0399c28600a98519cfa70))
+
+
+### Bug Fixes
+
+* **cli:** create the workspace network when no infrastructure does ([501022e](https://github.com/newstack-cloud/lo1/commit/501022e2c5a2ea659a4877cc64d793f7389f892d))
+* **cli:** honour hostPort, service preStop hooks and container-only compose files ([62b2df5](https://github.com/newstack-cloud/lo1/commit/62b2df5794ecb45950bd0348db427f8cbed12295))
+* **cli:** keep existing extra_hosts when adding the host gateway mapping ([f93b819](https://github.com/newstack-cloud/lo1/commit/f93b81914be93ec1bcbb37c5872f2298ec90dfd3))
+* **cli:** leave the hosts file alone and skip sudo when the proxy is disabled ([33edf27](https://github.com/newstack-cloud/lo1/commit/33edf2751cb47c26727a6306204a406dbb88b942))
+* **cli:** make lo1 status, restarts and the workspace lock hold up under review ([50af91e](https://github.com/newstack-cloud/lo1/commit/50af91ebfcd9f496eeb81ce3b7ef9e1b5a2bcd13))
+* **cli:** make restarts safe to repeat, run concurrently and interrupt ([6d0f7ac](https://github.com/newstack-cloud/lo1/commit/6d0f7ac2d6b1d175a2df9c1e872075cc244517a3))
+* **cli:** publish a plugin container's port where discovery advertises it ([00e500c](https://github.com/newstack-cloud/lo1/commit/00e500c39b24083f74191601370640ad3eee45c0))
+* **cli:** put compose-file services on the workspace network ([d516b52](https://github.com/newstack-cloud/lo1/commit/d516b526f069a0d97d39b833237d0d053efcef6e))
+* **cli:** restart from the recorded process when lo1 restart replaced a watched service ([3e4f0d8](https://github.com/newstack-cloud/lo1/commit/3e4f0d88799ccdf53c3a6a895f4ed61431ecf062))
+* **cli:** show each line of a service's output with its own prefix ([971dc2e](https://github.com/newstack-cloud/lo1/commit/971dc2e4d05131f47a1ed549b2a08aa33f645a2d))
+* **cli:** start init tasks and container services in dependency order ([9fab5fd](https://github.com/newstack-cloud/lo1/commit/9fab5fd6db88d4e603120dc58cb47bb3e6ddfe1e))
+* **cli:** stop compose from re-running lo1 services a compose service depends on ([64505ac](https://github.com/newstack-cloud/lo1/commit/64505ac863461182c677f7c1da8c129e8155cef8))
+
+
+### Dependencies
+
+* **repo:** fix high severity audit findings ([92c4001](https://github.com/newstack-cloud/lo1/commit/92c400143f2c11f536005f8cd58ec6763887bdbf))
+
 ## [0.4.0](https://github.com/newstack-cloud/lo1/compare/cli/v0.3.0...cli/v0.4.0) (2026-08-24)
 
 

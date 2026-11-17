@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/newstack-cloud/lo1/compare/plugin-celerity/v0.4.0...plugin-celerity/v0.5.0) (2026-11-17)
+
+
+### Miscellaneous
+
+* **plugin-celerity:** Synchronize lo1 versions
+
 ## [0.4.0](https://github.com/newstack-cloud/lo1/compare/plugin-celerity/v0.3.0...plugin-celerity/v0.4.0) (2026-08-24)
 
 
