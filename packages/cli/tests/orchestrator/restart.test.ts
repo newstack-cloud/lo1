@@ -78,6 +78,17 @@ describe("restartService", () => {
     expect(handle.pid).toBe(2);
   });
 
+  it("should remove an exited container before starting its replacement", async () => {
+    const { ctx, events } = makeContext();
+    const exited = makeHandle("orders", { type: "container", running: false });
+
+    await restartService("orders", exited, ctx);
+
+    expect(exited.stop).toHaveBeenCalled();
+    expect(ctx.deps.executeHook).not.toHaveBeenCalled();
+    expect(statuses(events)).toEqual(["starting", "started"]);
+  });
+
   it("should rerun an init task without stopping anything and report it completed", async () => {
     const { ctx, events } = makeContext();
 

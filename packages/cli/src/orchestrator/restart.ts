@@ -49,6 +49,11 @@ export async function restartService(
     await current.stop();
     current.releaseLogs?.();
     ctx.emit({ kind: "service", service: name, status: "stopped" });
+  } else if (current?.type === "container") {
+    // An exited container (or a finished init task's) still holds its name,
+    // which the new container needs; stop() also removes it.
+    await current.stop();
+    current.releaseLogs?.();
   }
 
   ctx.emit({ kind: "service", service: name, status: "starting" });

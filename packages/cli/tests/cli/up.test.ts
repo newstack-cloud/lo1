@@ -8,7 +8,9 @@ import {
   formatReadySummary,
   recordedHandle,
   recordReplacement,
+  startWatching,
 } from "../../src/cli/commands/up";
+import type { OrchestratorEvent } from "../../src/orchestrator/types";
 import { readState, writeState } from "../../src/orchestrator/state";
 
 const config: WorkspaceConfig = {
@@ -148,5 +150,43 @@ describe("recordedHandle", () => {
     expect(handle).toMatchObject({ serviceName: "api", type: "process", pid: 300 });
     expect(await recordedHandle(dir, "web")).toBeUndefined();
     await rm(dir, { recursive: true, force: true });
+  });
+});
+
+describe("startWatching", () => {
+  it("reports a watcher that fails to start and keeps the workspace running", () => {
+    const events: OrchestratorEvent[] = [];
+    const result = {
+      handles: [],
+      config: {
+        version: "1",
+        name: "shop",
+        services: {
+          orders: { type: "broken", path: "./orders", mode: "container", dependsOn: [], initTask: false },
+        },
+      },
+      registry: { endpoints: new Map() },
+      plugins: new Map([
+        [
+          "broken",
+          {
+            name: "broken",
+            watchForChanges: () => {
+              throw new Error("no watcher");
+            },
+          },
+        ],
+      ]),
+      pluginEnvVars: {},
+      compose: { projectName: "lo1-shop", fileArgs: [], cwd: "/ws" },
+    } as unknown as Parameters<typeof startWatching>[0];
+
+    const watcher = startWatching(result, "/ws", new AbortController().signal, (e) => events.push(e));
+
+    expect(watcher).toBeUndefined();
+    expect(events).toContainEqual({
+      kind: "error",
+      message: "Watching for changes failed to start: no watcher",
+    });
   });
 });

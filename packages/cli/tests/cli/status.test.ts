@@ -267,6 +267,7 @@ describe("getWorkspaceStatus", () => {
   it("treats infrastructure init tasks that exited 0 as healthy, and non-zero as degraded", async () => {
     const exited = (code: number) =>
       makeDeps({
+        readState: mock(() => Promise.resolve(makeWorkspaceState({ infraInitTasks: ["migrator"] }))),
         composePs: mock(() =>
           Promise.resolve([
             makeComposeStatus(),
@@ -281,6 +282,75 @@ describe("getWorkspaceStatus", () => {
     expect((await getWorkspaceStatus("/workspace", exited(1)))!.infrastructure.state).toBe(
       "degraded",
     );
+  });
+
+  it("treats long-running infrastructure that has stopped as degraded, even with exit 0", async () => {
+    const deps = makeDeps({
+      composePs: mock(() =>
+        Promise.resolve([
+          makeComposeStatus(),
+          makeComposeStatus({ Service: "postgres", State: "exited", ExitCode: 0 }),
+        ]),
+      ),
+    });
+
+    const result = await getWorkspaceStatus("/workspace", deps);
+
+    expect(result!.infrastructure.state).toBe("degraded");
+    expect(result!.healthy).toBe(false);
+  });
+
+  it("reports infrastructure lo1 started but compose no longer lists as degraded", async () => {
+    const deps = makeDeps({
+      readState: mock(() =>
+        Promise.resolve(makeWorkspaceState({ infraServices: ["lo1-my-platform-proxy", "postgres"] })),
+      ),
+    });
+
+    const result = await getWorkspaceStatus("/workspace", deps);
+
+    expect(result!.infrastructure.state).toBe("degraded");
+  });
+
+  it('reports "none" for a plugin workspace with no infrastructure, and stays healthy', async () => {
+    const config = {
+      ...makeConfig({ api: {} }),
+      proxy: { enabled: false, port: 80, tld: "local" },
+      plugins: { celerity: "@lo1/plugin-celerity" },
+    };
+    const deps = makeDeps({
+      readState: mock(() => Promise.resolve(makeWorkspaceState({ infraServices: [] }))),
+      composePs: mock(() => Promise.resolve([])),
+      loadConfig: mock(() => Promise.resolve(config)),
+    });
+
+    const result = await getWorkspaceStatus("/workspace", deps);
+
+    expect(result!.infrastructure.state).toBe("none");
+    expect(result!.healthy).toBe(true);
+  });
+
+  it("is not healthy while lo1 up is still starting services", async () => {
+    const deps = makeDeps({
+      readState: mock(() => Promise.resolve(makeWorkspaceState({ services: {}, ready: false }))),
+    });
+
+    const result = await getWorkspaceStatus("/workspace", deps);
+
+    expect(result!.healthy).toBe(false);
+  });
+
+  it("describes services in the mode lo1 up --mode started them in", async () => {
+    const deps = makeDeps({
+      readState: mock(() => Promise.resolve(makeWorkspaceState({ modeOverride: "dev" }))),
+      loadConfig: mock(() =>
+        Promise.resolve(makeConfig({ api: { mode: "container", port: 3000, hostPort: 3001 } })),
+      ),
+    });
+
+    const result = await getWorkspaceStatus("/workspace", deps);
+
+    expect(result!.services[0]).toMatchObject({ mode: "dev", port: 3000, hostPort: 3000 });
   });
 
   it('reports infrastructure "none" when the workspace has none, and stays healthy', async () => {

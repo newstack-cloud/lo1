@@ -179,6 +179,8 @@ async function waitForInitTask(started: StartedRunner, options: StartServiceOpti
     throw new ServiceStartError("Startup aborted");
   }
   if (code !== 0) {
+    // Remove a failed init task's container, so the next start can reuse its name.
+    await started.handle.stop().catch(() => {});
     const reason = code === null ? "failed to run" : `exited with code ${code}`;
     throw new ServiceStartError(`Init task "${options.serviceName}" ${reason}`);
   }

@@ -109,12 +109,13 @@ function hydrateHandle(
   };
 }
 
+/** Fails closed like isGroupAlive: only ESRCH means the process is gone. */
 function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code !== "ESRCH";
   }
 }
 
@@ -152,12 +153,24 @@ function trySignal(pid: number, signal: NodeJS.Signals): void {
  */
 async function stopProcessByPid(pid: number, timeoutMs: number): Promise<void> {
   trySignal(pid, "SIGTERM");
+  if (await waitForTreeExit(pid, timeoutMs)) return;
 
+  trySignal(pid, "SIGKILL");
+  // SIGKILL can't be ignored, but the kernel may take a moment to release the
+  // tree; wait so a restart doesn't start while the old process holds its port.
+  await waitForTreeExit(pid, KILL_WAIT_MS);
+}
+
+const KILL_WAIT_MS = 2000;
+
+/** Polls until the process tree is gone; false if it outlasts `timeoutMs`. */
+async function waitForTreeExit(pid: number, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
-  while (isTreeAlive(pid) && Date.now() < deadline) {
+  while (isTreeAlive(pid)) {
+    if (Date.now() >= deadline) return false;
     await new Promise((r) => setTimeout(r, 100));
   }
-  if (isTreeAlive(pid)) trySignal(pid, "SIGKILL");
+  return true;
 }
 
 /**

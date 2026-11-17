@@ -147,8 +147,10 @@ export async function startWorkspace(
     services: {} as Record<string, ServiceState>,
     pluginEnvVars: composeResult.pluginEnvVars,
     ...(options.modeOverride && { modeOverride: options.modeOverride }),
+    infraServices: composeResult.infraServices,
+    infraInitTasks,
   };
-  await deps.writeState(baseState, workspaceDir);
+  await deps.writeState({ ...baseState, ready: false }, workspaceDir);
 
   debug("startWorkspace: starting compose phases");
   const infraLogs = await startInfrastructure(
@@ -215,7 +217,10 @@ export async function startWorkspace(
     emit,
   });
 
-  await deps.writeState({ ...baseState, services: buildServiceState(handles) }, workspaceDir);
+  await deps.writeState(
+    { ...baseState, services: buildServiceState(handles), ready: true },
+    workspaceDir,
+  );
   await runWorkspaceHook({ hookName: "postSetup", ...hookCtx });
   timer.mark("services", true);
 

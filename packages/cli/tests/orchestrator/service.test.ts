@@ -208,6 +208,37 @@ describe("startService", () => {
     ).rejects.toThrow('Init task "api" exited with code 2');
   });
 
+  it("should remove a failed init task's container before reporting the failure", async () => {
+    const plugin: Plugin = {
+      name: "celerity",
+      configureContainer: mock(async () => ({
+        image: "celerity:latest",
+        cmd: ["migrate"],
+        envVars: {},
+        binds: [],
+        workingDir: "/app",
+      })),
+    };
+    const stop = mock(() => Promise.resolve());
+    const startContainer = mock(() =>
+      Promise.resolve({
+        serviceName: "api",
+        containerId: "abc123",
+        running: false,
+        stop,
+        exitPromise: Promise.resolve(null),
+        waitForExit: () => Promise.resolve(1),
+        releaseLogs: () => {},
+      }),
+    );
+    const serviceConfig = { ...makeOptions().serviceConfig, initTask: true };
+
+    await expect(
+      startService(makeOptions({ plugin, serviceConfig }), makeDeps({ startContainer })),
+    ).rejects.toThrow("exited with code 1");
+    expect(stop).toHaveBeenCalled();
+  });
+
   it("should call configureContainer with correct ContainerInput", async () => {
     const configureFn = mock(async (_input) => ({
       image: "test:latest",
