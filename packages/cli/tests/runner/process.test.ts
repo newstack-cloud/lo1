@@ -190,6 +190,21 @@ describe("startProcess", () => {
       await rm(dir, { recursive: true, force: true });
     });
 
+    it.skipIf(platform() === "win32")("should report each line of real output separately", async () => {
+      const outputs: OutputLine[] = [];
+      const handle = startProcess({
+        serviceName: "migrate",
+        command: "printf '\\nadded 14 packages\\nmigrations applied'",
+        cwd: tmpdir(),
+        env: {},
+        onOutput: (line) => outputs.push(line),
+      });
+
+      await handle.exitPromise;
+
+      expect(outputs.map((o) => o.text)).toEqual(["added 14 packages", "migrations applied"]);
+    });
+
     it.skipIf(platform() === "win32")("should write real process output to the log file", async () => {
       const dir = await mkdtemp(join(tmpdir(), "lo1-proc-"));
       const logFile = join(dir, "api.log");

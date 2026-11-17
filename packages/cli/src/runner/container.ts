@@ -5,6 +5,7 @@ import type { ContainerConfig } from "@lo1/sdk";
 import type { OutputLine } from "./process";
 import { createLog } from "../debug";
 import { Lo1Error } from "../errors";
+import { followLines } from "../output/line-buffer";
 
 const debug = createLog("runner:container");
 
@@ -121,27 +122,11 @@ export async function startContainer(
     stdio: ["ignore", "pipe", "pipe"],
   });
 
-  if (options.onOutput && logChild.stdout) {
-    logChild.stdout.on("data", (chunk: Buffer) => {
-      options.onOutput!({
-        service: options.serviceName,
-        stream: "stdout",
-        text: chunk.toString(),
-        timestamp: new Date(),
-      });
-    });
-  }
-
-  if (options.onOutput && logChild.stderr) {
-    logChild.stderr.on("data", (chunk: Buffer) => {
-      options.onOutput!({
-        service: options.serviceName,
-        stream: "stderr",
-        text: chunk.toString(),
-        timestamp: new Date(),
-      });
-    });
-  }
+  const onOutput = options.onOutput;
+  const emitLine = (stream: "stdout" | "stderr") => (text: string) =>
+    onOutput?.({ service: options.serviceName, stream, text, timestamp: new Date() });
+  if (onOutput && logChild.stdout) followLines(logChild.stdout, emitLine("stdout"));
+  if (onOutput && logChild.stderr) followLines(logChild.stderr, emitLine("stderr"));
 
   const exitPromise = new Promise<number | null>((resolve) => {
     logChild.on("close", () => {
