@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { spawn } from "node:child_process";
 import { platform } from "node:os";
 import { buildServiceState, startWorkspace } from "../../orchestrator/start";
-import { stopWorkspace } from "../../orchestrator/stop";
+import { hydrateHandles, stopWorkspace } from "../../orchestrator/stop";
 import { watchPluginServices } from "../../orchestrator/watch";
 import { withWorkspaceLock } from "../../orchestrator/lock";
 import { readState, writeState } from "../../orchestrator/state";
@@ -128,6 +128,16 @@ async function teardown(opts: TeardownOptions): Promise<void> {
   }
 }
 
+/** A service's handle as the state file records it, if the workspace is still running. */
+export async function recordedHandle(
+  workspaceDir: string,
+  name: string,
+): Promise<ServiceHandle | undefined> {
+  const state = await readState(workspaceDir);
+  if (!state?.services[name]) return undefined;
+  return hydrateHandles({ ...state, services: { [name]: state.services[name] } })[0];
+}
+
 /** Points the state file at a service's new process after the watcher restarts it. */
 export async function recordReplacement(
   workspaceDir: string,
@@ -222,6 +232,7 @@ export const upCommand = new Command("up")
         {
           runExclusive: (fn) => withWorkspaceLock(workspaceDir, fn),
           onReplaced: (handle) => recordReplacement(workspaceDir, handle),
+          recordedHandle: (name) => recordedHandle(workspaceDir, name),
         },
       );
       await waitForShutdownSignal(controller);
