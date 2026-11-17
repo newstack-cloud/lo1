@@ -16,7 +16,21 @@ export type WatchOptions = {
   runExclusive?: <T>(fn: () => Promise<T>) => Promise<T>;
   /** Called with each replacement handle, inside `runExclusive`, to record it. */
   onReplaced?: (handle: ServiceHandle) => Promise<void>;
+  /**
+   * The service's handle as the state file records it, read inside
+   * `runExclusive`. Lets a restart pick up a process `lo1 restart` started
+   * since this watcher last replaced the service.
+   */
+  recordedHandle?: (name: string) => Promise<ServiceHandle | undefined>;
 };
+
+/** Whether two handles refer to different host processes or containers. */
+function isDifferentInstance(held: ServiceHandle | undefined, recorded: ServiceHandle): boolean {
+  if (recorded.type === "process") return recorded.pid !== held?.pid;
+  if (recorded.type === "container") return recorded.containerId !== held?.containerId;
+  // Compose services are recreated by compose itself, whichever handle is used.
+  return false;
+}
 
 /**
  * Follows each plugin's watchForChanges() for the services it owns and
@@ -78,10 +92,19 @@ export function watchPluginServices(
     }
   }
 
+  /** The handle to restart from: ours, unless `lo1 restart` has replaced the service since. */
+  async function currentHandle(name: string, held: ServiceHandle | undefined) {
+    const recorded = await options.recordedHandle?.(name);
+    if (!recorded || !isDifferentInstance(held, recorded)) return held;
+    debug("%s was restarted elsewhere; restarting from the recorded handle", name);
+    return recorded;
+  }
+
   async function restartAndReplace(name: string) {
     const index = handles.findIndex((h) => h.serviceName === name);
     try {
-      const handle = await restartService(name, handles[index], ctx);
+      const current = await currentHandle(name, handles[index]);
+      const handle = await restartService(name, current, ctx);
       if (index === -1) handles.push(handle);
       else handles[index] = handle;
       await options.onReplaced?.(handle);

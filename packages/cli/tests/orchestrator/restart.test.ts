@@ -214,6 +214,40 @@ describe("watchPluginServices", () => {
     expect(order).toEqual(["lock", "recorded orders:2", "unlock"]);
   });
 
+  it("should restart from the recorded process when lo1 restart replaced it", async () => {
+    const channel = signalChannel();
+    const plugin: Plugin = { name: "celerity", watchForChanges: () => channel.iterable };
+    const { ctx } = makeContext({ plugins: new Map([["celerity", plugin]]) });
+    const held = makeHandle("orders", { pid: 10 });
+    const recorded = makeHandle("orders", { pid: 20 });
+
+    const watcher = watchPluginServices([held], ctx, {
+      recordedHandle: async () => recorded,
+    });
+    channel.send({ reason: "changed" });
+    await new Promise((r) => setTimeout(r, 20));
+    await watcher.stop();
+
+    expect(recorded.stop).toHaveBeenCalled();
+    expect(held.stop).not.toHaveBeenCalled();
+  });
+
+  it("should keep its own handle when the state file records the same process", async () => {
+    const channel = signalChannel();
+    const plugin: Plugin = { name: "celerity", watchForChanges: () => channel.iterable };
+    const { ctx } = makeContext({ plugins: new Map([["celerity", plugin]]) });
+    const held = makeHandle("orders", { pid: 10 });
+    const recorded = makeHandle("orders", { pid: 10 });
+
+    const watcher = watchPluginServices([held], ctx, { recordedHandle: async () => recorded });
+    channel.send({ reason: "changed" });
+    await new Promise((r) => setTimeout(r, 20));
+    await watcher.stop();
+
+    expect(held.stop).toHaveBeenCalled();
+    expect(recorded.stop).not.toHaveBeenCalled();
+  });
+
   it("should stop the watchers it started when a later plugin fails to set up", () => {
     const returned = mock(() => Promise.resolve({ done: true as const, value: undefined }));
     const started: AsyncIterable<RestartSignal> = {

@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { recordReplacement } from "../../src/cli/commands/up";
+import { recordedHandle, recordReplacement } from "../../src/cli/commands/up";
 import { readState, writeState } from "../../src/orchestrator/state";
 
 describe("recordReplacement", () => {
@@ -44,6 +44,28 @@ describe("recordReplacement", () => {
     await recordReplacement(dir, { serviceName: "api", type: "process", pid: 1, running: true, stop: async () => {} });
 
     expect(await readState(dir)).toBeNull();
+    await rm(dir, { recursive: true, force: true });
+  });
+});
+
+describe("recordedHandle", () => {
+  it("returns the service's handle from the state file, or undefined", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lo1-up-"));
+    await writeState(
+      {
+        workspaceName: "shop",
+        projectName: "lo1-shop",
+        fileArgs: [],
+        workspaceDir: dir,
+        services: { api: { runner: "process", pid: 300 } },
+      },
+      dir,
+    );
+
+    const handle = await recordedHandle(dir, "api");
+
+    expect(handle).toMatchObject({ serviceName: "api", type: "process", pid: 300 });
+    expect(await recordedHandle(dir, "web")).toBeUndefined();
     await rm(dir, { recursive: true, force: true });
   });
 });
