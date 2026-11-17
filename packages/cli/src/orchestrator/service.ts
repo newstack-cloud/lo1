@@ -96,7 +96,7 @@ export const BUILTIN_TYPES = new Set(["service", "app"]);
 
 type Runner = "plugin-container" | "process" | "compose";
 
-/** A started service, plus the exit of its process when lo1 runs it on the host. */
+/** A started service, plus how lo1 learns it exited when it waits on that (init tasks). */
 type StartedRunner = {
   handle: ServiceHandle;
   exited?: Promise<number | null>;
@@ -160,9 +160,7 @@ async function startRunner(
   env: Record<string, string>,
   deps: StartServiceDeps,
 ): Promise<StartedRunner> {
-  if (runner === "plugin-container") {
-    return { handle: await startWithContainer(options, env, deps) };
-  }
+  if (runner === "plugin-container") return startWithContainer(options, env, deps);
   if (runner === "process") return startWithProcess(options, env, deps);
   return { handle: await startWithCompose(options, deps) };
 }
@@ -245,7 +243,7 @@ async function startWithContainer(
   options: StartServiceOptions,
   env: Record<string, string>,
   deps: StartServiceDeps,
-): Promise<ServiceHandle> {
+): Promise<StartedRunner> {
   const { serviceName, serviceConfig, plugin, config, registry } = options;
 
   const endpoints: Record<string, string> = {};
@@ -277,14 +275,18 @@ async function startWithContainer(
   });
 
   return {
-    serviceName,
-    type: "container",
-    containerId: handle.containerId,
-    get running() {
-      return handle.running;
+    handle: {
+      serviceName,
+      type: "container",
+      containerId: handle.containerId,
+      get running() {
+        return handle.running;
+      },
+      stop: (timeout) => handle.stop(timeout),
+      releaseLogs: () => handle.releaseLogs(),
     },
-    stop: (timeout) => handle.stop(timeout),
-    releaseLogs: () => handle.releaseLogs(),
+    // An init task only counts as done once its container exits with code 0.
+    exited: serviceConfig.initTask ? handle.waitForExit() : undefined,
   };
 }
 

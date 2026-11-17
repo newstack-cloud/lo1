@@ -135,7 +135,7 @@ describe("watchPluginServices", () => {
     const watcher = watchPluginServices(handles, ctx);
     channel.send({ reason: "blueprint changed" });
     await new Promise((r) => setTimeout(r, 20));
-    watcher.stop();
+    await watcher.stop();
 
     expect(events).toContainEqual({ kind: "phase", phase: "Restarting orders: blueprint changed" });
     expect(handles[0].pid).toBe(2);
@@ -164,11 +164,93 @@ describe("watchPluginServices", () => {
     expect(handles[0].pid).toBe(3);
   });
 
+  it("should let a restart under way finish before stop() resolves", async () => {
+    const channel = signalChannel();
+    const plugin: Plugin = { name: "celerity", watchForChanges: () => channel.iterable };
+    let finishStart: () => void = () => {};
+    const startService = mock(
+      (opts: { serviceName: string }) =>
+        new Promise<ServiceHandle>((r) => (finishStart = () => r(makeHandle(opts.serviceName, { pid: 4 })))),
+    );
+    const { ctx } = makeContext({
+      plugins: new Map([["celerity", plugin]]),
+      deps: { startService, executeHook: mock((n) => Promise.resolve({ exitCode: 0, hookName: n })) },
+    });
+    const handles = [makeHandle("orders", { type: "container" })];
+
+    const watcher = watchPluginServices(handles, ctx);
+    channel.send({ reason: "changed" });
+    await new Promise((r) => setTimeout(r, 20));
+    const stopped = watcher.stop();
+    finishStart();
+    await stopped;
+
+    expect(handles[0].pid).toBe(4);
+  });
+
+  it("should run each restart exclusively and report the replacement", async () => {
+    const channel = signalChannel();
+    const plugin: Plugin = { name: "celerity", watchForChanges: () => channel.iterable };
+    const { ctx } = makeContext({ plugins: new Map([["celerity", plugin]]) });
+    const order: string[] = [];
+    const runExclusive = async <T>(fn: () => Promise<T>) => {
+      order.push("lock");
+      const result = await fn();
+      order.push("unlock");
+      return result;
+    };
+    const onReplaced = mock(async (handle: ServiceHandle) => {
+      order.push(`recorded ${handle.serviceName}:${handle.pid}`);
+    });
+
+    const watcher = watchPluginServices([makeHandle("orders", { type: "container" })], ctx, {
+      runExclusive,
+      onReplaced,
+    });
+    channel.send({ reason: "changed" });
+    await new Promise((r) => setTimeout(r, 20));
+    await watcher.stop();
+
+    expect(order).toEqual(["lock", "recorded orders:2", "unlock"]);
+  });
+
+  it("should stop the watchers it started when a later plugin fails to set up", () => {
+    const returned = mock(() => Promise.resolve({ done: true as const, value: undefined }));
+    const started: AsyncIterable<RestartSignal> = {
+      [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}), return: returned }),
+    };
+    const configWithTwo: WorkspaceConfig = {
+      ...config,
+      services: {
+        orders: service({ type: "celerity", mode: "container" }),
+        billing: service({ type: "broken", mode: "container" }),
+      },
+    };
+    const { ctx } = makeContext({
+      config: configWithTwo,
+      plugins: new Map<string, Plugin>([
+        ["celerity", { name: "celerity", watchForChanges: () => started }],
+        [
+          "broken",
+          {
+            name: "broken",
+            watchForChanges: () => {
+              throw new Error("no watcher");
+            },
+          },
+        ],
+      ]),
+    });
+
+    expect(() => watchPluginServices([], ctx)).toThrow("no watcher");
+    expect(returned).toHaveBeenCalled();
+  });
+
   it("should not watch services whose plugin has no watchForChanges", () => {
     const watch = mock(() => signalChannel().iterable);
     const { ctx } = makeContext({ plugins: new Map([["other", { name: "other", watchForChanges: watch }]]) });
 
-    watchPluginServices([], ctx).stop();
+    void watchPluginServices([], ctx).stop();
 
     expect(watch).not.toHaveBeenCalled();
   });

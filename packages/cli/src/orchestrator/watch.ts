@@ -6,7 +6,17 @@ import type { ServiceHandle } from "./service";
 
 const debug = createLog("orchestrator:watch");
 
-export type WatchHandle = { stop: () => void };
+export type WatchHandle = {
+  /** Stops watching and resolves once any restart already under way has finished. */
+  stop: () => Promise<void>;
+};
+
+export type WatchOptions = {
+  /** Runs each restart exclusively, e.g. under the workspace state lock. */
+  runExclusive?: <T>(fn: () => Promise<T>) => Promise<T>;
+  /** Called with each replacement handle, inside `runExclusive`, to record it. */
+  onReplaced?: (handle: ServiceHandle) => Promise<void>;
+};
 
 /**
  * Follows each plugin's watchForChanges() for the services it owns and
@@ -15,21 +25,38 @@ export type WatchHandle = { stop: () => void };
  * Restarts of one service never overlap; a failed restart is reported and
  * watching continues.
  */
-export function watchPluginServices(handles: ServiceHandle[], ctx: RestartContext): WatchHandle {
+export function watchPluginServices(
+  handles: ServiceHandle[],
+  ctx: RestartContext,
+  options: WatchOptions = {},
+): WatchHandle {
+  const runExclusive = options.runExclusive ?? ((fn) => fn());
   const iterators: AsyncIterator<RestartSignal>[] = [];
+  const inFlight = new Set<Promise<void>>();
   let stopped = false;
 
-  for (const [name, service] of Object.entries(ctx.config.services)) {
-    const plugin = ctx.plugins.get(service.type);
-    if (service.mode === "skip" || service.initTask || !plugin?.watchForChanges) continue;
+  const closeIterators = () => {
+    stopped = true;
+    for (const iterator of iterators) void iterator.return?.();
+  };
 
-    const iterable = plugin.watchForChanges({
-      serviceName: name,
-      servicePath: resolve(ctx.workspaceDir, service.path),
-    });
-    const iterator = iterable[Symbol.asyncIterator]();
-    iterators.push(iterator);
-    void followSignals(name, iterator);
+  try {
+    for (const [name, service] of Object.entries(ctx.config.services)) {
+      const plugin = ctx.plugins.get(service.type);
+      if (service.mode === "skip" || service.initTask || !plugin?.watchForChanges) continue;
+
+      const iterable = plugin.watchForChanges({
+        serviceName: name,
+        servicePath: resolve(ctx.workspaceDir, service.path),
+      });
+      const iterator = iterable[Symbol.asyncIterator]();
+      iterators.push(iterator);
+      void followSignals(name, iterator);
+    }
+  } catch (err) {
+    // Don't leave the watchers that did start running behind a failed setup.
+    closeIterators();
+    throw err;
   }
 
   async function followSignals(name: string, iterator: AsyncIterator<RestartSignal>) {
@@ -42,7 +69,12 @@ export function watchPluginServices(handles: ServiceHandle[], ctx: RestartContex
       if (next.done || stopped) return;
 
       ctx.emit({ kind: "phase", phase: `Restarting ${name}: ${next.value.reason}` });
-      await restartAndReplace(name);
+      const restart = runExclusive(() => restartAndReplace(name)).catch((err: unknown) =>
+        reportRestartFailure(name, err),
+      );
+      inFlight.add(restart);
+      await restart;
+      inFlight.delete(restart);
     }
   }
 
@@ -52,16 +84,21 @@ export function watchPluginServices(handles: ServiceHandle[], ctx: RestartContex
       const handle = await restartService(name, handles[index], ctx);
       if (index === -1) handles.push(handle);
       else handles[index] = handle;
+      await options.onReplaced?.(handle);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      ctx.emit({ kind: "error", message: `Restarting "${name}" failed: ${message}` });
+      reportRestartFailure(name, err);
     }
   }
 
+  function reportRestartFailure(name: string, err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.emit({ kind: "error", message: `Restarting "${name}" failed: ${message}` });
+  }
+
   return {
-    stop: () => {
-      stopped = true;
-      for (const iterator of iterators) void iterator.return?.();
+    stop: async () => {
+      closeIterators();
+      await Promise.allSettled([...inFlight]);
     },
   };
 }
