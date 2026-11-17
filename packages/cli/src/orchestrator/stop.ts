@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { resolve } from "node:path";
+import { platform } from "node:os";
 import { promisify } from "node:util";
 import type { WorkspaceConfig } from "@lo1/sdk";
 import { createLog } from "../debug";
@@ -114,6 +115,25 @@ function isAlive(pid: number): boolean {
   }
 }
 
+/**
+ * Whether anything in the process group `pid` leads is still running. Only
+ * ESRCH means the group is gone; any other error (EPERM) means it may exist.
+ */
+export function isGroupAlive(pid: number, kill: typeof process.kill = process.kill): boolean {
+  try {
+    kill(-pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+/** Detached services lead their own process group; on Windows there are no groups. */
+function isTreeAlive(pid: number): boolean {
+  if (platform() === "win32") return isAlive(pid);
+  return isGroupAlive(pid) || isAlive(pid);
+}
+
 function trySignal(pid: number, signal: NodeJS.Signals): void {
   try {
     signalProcessTree(pid, signal);
@@ -123,17 +143,18 @@ function trySignal(pid: number, signal: NodeJS.Signals): void {
 }
 
 /**
- * Stops a process lo1 did not spawn in this run, waiting for it to exit so
- * its port is free again, and killing it if it outlasts the timeout.
+ * Stops a process lo1 did not spawn in this run, waiting for it and its
+ * children to exit so its port is free again, and killing whatever is left
+ * of the group if it outlasts the timeout.
  */
 async function stopProcessByPid(pid: number, timeoutMs: number): Promise<void> {
   trySignal(pid, "SIGTERM");
 
   const deadline = Date.now() + timeoutMs;
-  while (isAlive(pid) && Date.now() < deadline) {
+  while (isTreeAlive(pid) && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 100));
   }
-  if (isAlive(pid)) trySignal(pid, "SIGKILL");
+  if (isTreeAlive(pid)) trySignal(pid, "SIGKILL");
 }
 
 /**
@@ -211,6 +232,7 @@ export async function stopWorkspace(
   await stopServiceHandles(handles, {
     config,
     workspaceDir,
+    pluginEnvVars: state.pluginEnvVars ?? {},
     executeHook: deps.executeHook,
     emit,
     signal: options.signal,
@@ -235,6 +257,8 @@ export type ServicePreStopContext = {
   handle: ServiceHandle;
   config: WorkspaceConfig;
   workspaceDir: string;
+  /** The plugin variables the service was started with, as its other hooks get them. */
+  pluginEnvVars?: Record<string, string>;
   executeHook: OrchestratorDeps["executeHook"];
   emit: (event: OrchestratorEvent) => void;
   signal?: AbortSignal;
@@ -252,7 +276,8 @@ export async function runServicePreStop(ctx: ServicePreStopContext): Promise<voi
 
   const consumerMode = ctx.handle.type === "process" ? "host" : "container";
   const registry = buildEndpointRegistry(ctx.config);
-  const env = buildServiceEnv(name, service, ctx.config, registry, {}, consumerMode);
+  const pluginEnvVars = ctx.pluginEnvVars ?? {};
+  const env = buildServiceEnv(name, service, ctx.config, registry, pluginEnvVars, consumerMode);
 
   try {
     await ctx.executeHook(`${name}:preStop`, command, {

@@ -1,10 +1,12 @@
 import { Command } from "commander";
 import { spawn } from "node:child_process";
 import { platform } from "node:os";
-import { startWorkspace } from "../../orchestrator/start";
+import { buildServiceState, startWorkspace } from "../../orchestrator/start";
 import { stopWorkspace } from "../../orchestrator/stop";
 import { watchPluginServices } from "../../orchestrator/watch";
-import { startService } from "../../orchestrator/service";
+import { withWorkspaceLock } from "../../orchestrator/lock";
+import { readState, writeState } from "../../orchestrator/state";
+import { startService, type ServiceHandle } from "../../orchestrator/service";
 import { executeHook } from "../../hooks/executor";
 import { loadWorkspaceConfig } from "../../config/loader";
 import { collectDomains } from "../../proxy/domains";
@@ -126,6 +128,20 @@ async function teardown(opts: TeardownOptions): Promise<void> {
   }
 }
 
+/** Points the state file at a service's new process after the watcher restarts it. */
+export async function recordReplacement(
+  workspaceDir: string,
+  handle: ServiceHandle,
+): Promise<void> {
+  const state = await readState(workspaceDir);
+  if (!state) return;
+  const { [handle.serviceName]: _previous, ...others } = state.services;
+  await writeState(
+    { ...state, services: { ...others, ...buildServiceState([handle]) } },
+    workspaceDir,
+  );
+}
+
 export const upCommand = new Command("up")
   .description("Start all services and infrastructure")
   .option("--services <names>", "Comma-separated list of services to start")
@@ -189,20 +205,28 @@ export const upCommand = new Command("up")
         return;
       }
 
-      const watcher = watchPluginServices(result.handles, {
-        config: result.config,
-        workspaceDir,
-        registry: result.registry,
-        plugins: result.plugins,
-        pluginEnvVars: result.pluginEnvVars,
-        compose: result.compose,
-        detached: false,
-        signal: controller.signal,
-        emit: onEvent,
-        deps: { startService, executeHook },
-      });
+      const watcher = watchPluginServices(
+        result.handles,
+        {
+          config: result.config,
+          workspaceDir,
+          registry: result.registry,
+          plugins: result.plugins,
+          pluginEnvVars: result.pluginEnvVars,
+          compose: result.compose,
+          detached: false,
+          signal: controller.signal,
+          emit: onEvent,
+          deps: { startService, executeHook },
+        },
+        {
+          runExclusive: (fn) => withWorkspaceLock(workspaceDir, fn),
+          onReplaced: (handle) => recordReplacement(workspaceDir, handle),
+        },
+      );
       await waitForShutdownSignal(controller);
-      watcher.stop();
+      // Let a restart under way finish, so teardown sees its new process.
+      await watcher.stop();
     } catch (err) {
       if (!controller.signal.aborted) {
         startupError = err;

@@ -34,6 +34,8 @@ export type ContainerHandle = {
   readonly running: boolean;
   stop(timeoutMs?: number): Promise<void>;
   readonly exitPromise: Promise<number | null>;
+  /** Waits for the container to exit and returns its exit code, or null if Docker can't say. */
+  waitForExit(): Promise<number | null>;
   /** Stops following the container's logs; the container keeps running. */
   releaseLogs(): void;
 };
@@ -181,6 +183,17 @@ export async function startContainer(
     },
     stop,
     exitPromise,
+    waitForExit: () => waitForContainerExit(containerId, exec),
     releaseLogs: () => logChild.kill(),
   };
+}
+
+async function waitForContainerExit(containerId: string, exec: ExecFn): Promise<number | null> {
+  try {
+    const { stdout } = await exec("docker", ["wait", containerId]);
+    const code = Number.parseInt(stdout.trim(), 10);
+    return Number.isNaN(code) ? null : code;
+  } catch {
+    return null;
+  }
 }

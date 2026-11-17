@@ -188,6 +188,29 @@ describe("startContainer", () => {
     expect(args[tIdx + 1]).toBe("30");
   });
 
+  it("should report the container's exit code from docker wait", async () => {
+    const execFn = mock<ExecFn>((_cmd, args) =>
+      Promise.resolve({ stdout: args[0] === "wait" ? "3\n" : "abc123def456\n", stderr: "" }),
+    );
+
+    const handle = await startContainer(defaultOptions, execFn, makeLogSpawnFn());
+
+    expect(await handle.waitForExit()).toBe(3);
+    expect(execFn.mock.calls.at(-1)?.[1]).toEqual(["wait", "abc123def456"]);
+  });
+
+  it("should report null when docker wait fails", async () => {
+    const execFn = mock<ExecFn>((_cmd, args) =>
+      args[0] === "wait"
+        ? Promise.reject(new Error("no such container"))
+        : Promise.resolve({ stdout: "abc123def456\n", stderr: "" }),
+    );
+
+    const handle = await startContainer(defaultOptions, execFn, makeLogSpawnFn());
+
+    expect(await handle.waitForExit()).toBeNull();
+  });
+
   it("should throw ContainerRunnerError on docker run failure", () => {
     const execFn = mock<ExecFn>(() => Promise.reject(new Error("docker failed")));
     const logSpawn = makeLogSpawnFn();

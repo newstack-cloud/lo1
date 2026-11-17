@@ -1,11 +1,18 @@
 import { describe, it, expect, mock } from "bun:test";
 import { resolve, join } from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { platform, tmpdir } from "node:os";
 import { startProcess } from "../../src/runner/process";
-import { stopWorkspace, hydrateHandles, type StopDeps } from "../../src/orchestrator/stop";
+import {
+  stopWorkspace,
+  hydrateHandles,
+  isGroupAlive,
+  runServicePreStop,
+  type StopDeps,
+} from "../../src/orchestrator/stop";
 import type { ServiceHandle } from "../../src/orchestrator/service";
 import type { WorkspaceState, OrchestratorEvent } from "../../src/orchestrator/types";
+import type { WorkspaceConfig } from "@lo1/sdk";
 
 const sampleState: WorkspaceState = {
   workspaceName: "my-platform",
@@ -174,7 +181,7 @@ describe("stopWorkspace", () => {
     const killCalls: number[] = [];
     const originalKill = process.kill;
     process.kill = ((pid: number, signal?: string | number) => {
-      if (signal === 0) throw new Error("ESRCH");
+      if (signal === 0) throw Object.assign(new Error("ESRCH"), { code: "ESRCH" });
       killCalls.push(pid);
       return true;
     }) as typeof process.kill;
@@ -243,7 +250,7 @@ describe("stopWorkspace", () => {
     const originalKill = process.kill;
     process.kill = ((pid: number, signal?: string | number) => {
       // Signal 0 is the liveness check: report the process gone once signalled.
-      if (signal === 0) throw new Error("ESRCH");
+      if (signal === 0) throw Object.assign(new Error("ESRCH"), { code: "ESRCH" });
       killCalls.push([pid, signal ?? "SIGTERM"]);
       return true;
     }) as typeof process.kill;
@@ -343,7 +350,7 @@ describe("hydrateHandles", () => {
     const originalKill = process.kill;
     process.kill = ((pid: number, signal?: string | number) => {
       // Signal 0 is the liveness check: report the process gone once signalled.
-      if (signal === 0) throw new Error("ESRCH");
+      if (signal === 0) throw Object.assign(new Error("ESRCH"), { code: "ESRCH" });
       killCalls.push([pid, signal ?? "SIGTERM"]);
       return true;
     }) as typeof process.kill;
@@ -396,6 +403,23 @@ describe("hydrateHandles", () => {
       await rm(dir, { recursive: true, force: true });
     });
 
+    it.skipIf(platform() === "win32")(
+      "should kill children that outlive their parent's exit",
+      async () => {
+        const { dir, handle } = await startDetached(
+          "(trap '' TERM; while true; do sleep 0.1; done) & echo $! > child.pid; " +
+            "trap 'exit 0' TERM; while true; do sleep 0.1; done",
+        );
+        const childPid = Number.parseInt(await readFile(join(dir, "child.pid"), "utf-8"), 10);
+
+        await handle.stop(500);
+        await new Promise((r) => setTimeout(r, 100));
+
+        expect(isAlive(childPid)).toBe(false);
+        await rm(dir, { recursive: true, force: true });
+      },
+    );
+
     it.skipIf(platform() === "win32")("should kill a process that ignores SIGTERM", async () => {
       const { dir, pid, handle } = await startDetached("trap '' TERM; while true; do sleep 0.1; done");
 
@@ -405,5 +429,50 @@ describe("hydrateHandles", () => {
       expect(isAlive(pid)).toBe(false);
       await rm(dir, { recursive: true, force: true });
     });
+  });
+});
+
+describe("isGroupAlive", () => {
+  const killThrowing = (code: string) =>
+    (() => {
+      throw Object.assign(new Error(code), { code });
+    }) as unknown as typeof process.kill;
+
+  it("probes the whole group, not just its leader", () => {
+    const kill = mock(() => true) as unknown as typeof process.kill;
+
+    expect(isGroupAlive(42, kill)).toBe(true);
+    expect(kill).toHaveBeenCalledWith(-42, 0);
+  });
+
+  it("treats only ESRCH as the group being gone", () => {
+    expect(isGroupAlive(42, killThrowing("ESRCH"))).toBe(false);
+    expect(isGroupAlive(42, killThrowing("EPERM"))).toBe(true);
+  });
+});
+
+describe("runServicePreStop", () => {
+  it("gives the hook the plugin variables the service was started with", async () => {
+    const executeHook = mock((name: string) => Promise.resolve({ exitCode: 0, hookName: name }));
+    const config = {
+      version: "1",
+      name: "shop",
+      services: {
+        api: { type: "service", path: "./api", mode: "dev", dependsOn: [], initTask: false,
+          hooks: { preStop: "./drain.sh" } },
+      },
+    } as unknown as WorkspaceConfig;
+
+    await runServicePreStop({
+      handle: { serviceName: "api", type: "process", running: true, stop: async () => {} },
+      config,
+      workspaceDir: "/ws",
+      pluginEnvVars: { QUEUE_URL: "http://localhost:9324" },
+      executeHook,
+      emit: () => {},
+    });
+
+    const [, , opts] = executeHook.mock.calls[0] as unknown as [string, string, { env: Record<string, string> }];
+    expect(opts.env.QUEUE_URL).toBe("http://localhost:9324");
   });
 });

@@ -12,6 +12,7 @@ import { startService, BUILTIN_TYPES } from "../../orchestrator/service";
 import { applyModeOverride, buildServiceState, createLogger } from "../../orchestrator/start";
 import { readState, writeState } from "../../orchestrator/state";
 import { hydrateHandles } from "../../orchestrator/stop";
+import { withWorkspaceLock } from "../../orchestrator/lock";
 import type { OrchestratorEvent, WorkspaceState } from "../../orchestrator/types";
 
 export class RestartError extends Lo1Error {
@@ -77,36 +78,48 @@ export const restartCommand = new Command("restart")
     const controller = new AbortController();
     process.on("SIGINT", () => controller.abort());
 
-    const state = await requireRunningWorkspace(workspaceDir);
-    const config = applyModeOverride(await loadWorkspaceConfig(), state.modeOverride);
-    validateRestartTargets(names, config);
-
-    const emit = createRestartEventHandler(workspaceDir);
-    const ctx = {
-      config,
-      workspaceDir,
-      registry: buildEndpointRegistry(config),
-      plugins: await loadNeededPlugins(names, config, workspaceDir, emit),
-      pluginEnvVars: state.pluginEnvVars ?? {},
-      compose: { projectName: state.projectName, fileArgs: state.fileArgs, cwd: workspaceDir },
-      detached: true,
-      signal: controller.signal,
-      emit,
-      deps: { startService, executeHook },
-    };
-
-    const current = hydrateHandles(state);
-    for (const name of names) {
-      const handle = await restartService(
-        name,
-        current.find((h) => h.serviceName === name),
-        ctx,
-      );
-      handle.releaseLogs?.();
-      handle.detach?.();
-
-      const { [name]: _previous, ...others } = state.services;
-      state.services = { ...others, ...buildServiceState([handle]) };
-      await writeState(state, workspaceDir);
-    }
+    // Held from reading the state to writing it, so concurrent restarts
+    // can't overwrite each other's process ids.
+    await withWorkspaceLock(workspaceDir, () =>
+      restartServices(names, workspaceDir, controller.signal),
+    );
   });
+
+async function restartServices(
+  names: string[],
+  workspaceDir: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const state = await requireRunningWorkspace(workspaceDir);
+  const config = applyModeOverride(await loadWorkspaceConfig(), state.modeOverride);
+  validateRestartTargets(names, config);
+
+  const emit = createRestartEventHandler(workspaceDir);
+  const ctx = {
+    config,
+    workspaceDir,
+    registry: buildEndpointRegistry(config),
+    plugins: await loadNeededPlugins(names, config, workspaceDir, emit),
+    pluginEnvVars: state.pluginEnvVars ?? {},
+    compose: { projectName: state.projectName, fileArgs: state.fileArgs, cwd: workspaceDir },
+    detached: true,
+    signal,
+    emit,
+    deps: { startService, executeHook },
+  };
+
+  const current = hydrateHandles(state);
+  for (const name of names) {
+    const index = current.findIndex((h) => h.serviceName === name);
+    const handle = await restartService(name, current[index], ctx);
+    handle.releaseLogs?.();
+    handle.detach?.();
+    // A name given twice restarts the replacement, not the original again.
+    if (index === -1) current.push(handle);
+    else current[index] = handle;
+
+    const { [name]: _previous, ...others } = state.services;
+    state.services = { ...others, ...buildServiceState([handle]) };
+    await writeState(state, workspaceDir);
+  }
+}

@@ -169,6 +169,45 @@ describe("startService", () => {
     expect(opts.ports).toEqual(["3000:3000"]);
   });
 
+  it("should wait for a plugin-container init task to exit, and fail on a non-zero code", async () => {
+    const plugin: Plugin = {
+      name: "celerity",
+      configureContainer: mock(async () => ({
+        image: "celerity:latest",
+        cmd: ["migrate"],
+        envVars: {},
+        binds: [],
+        workingDir: "/app",
+      })),
+    };
+    const containerExiting = (code: number) =>
+      mock(() =>
+        Promise.resolve({
+          serviceName: "api",
+          containerId: "abc123",
+          running: true,
+          stop: mock(() => Promise.resolve()),
+          exitPromise: new Promise<number | null>(() => {}),
+          waitForExit: () => Promise.resolve(code),
+          releaseLogs: () => {},
+        }),
+      );
+    const serviceConfig = { ...makeOptions().serviceConfig, initTask: true };
+
+    await expect(
+      startService(
+        makeOptions({ plugin, serviceConfig }),
+        makeDeps({ startContainer: containerExiting(0) }),
+      ),
+    ).resolves.toBeDefined();
+    await expect(
+      startService(
+        makeOptions({ plugin, serviceConfig }),
+        makeDeps({ startContainer: containerExiting(2) }),
+      ),
+    ).rejects.toThrow('Init task "api" exited with code 2');
+  });
+
   it("should call configureContainer with correct ContainerInput", async () => {
     const configureFn = mock(async (_input) => ({
       image: "test:latest",

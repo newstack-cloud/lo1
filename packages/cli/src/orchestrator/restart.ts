@@ -41,6 +41,7 @@ export async function restartService(
       handle: current,
       config: ctx.config,
       workspaceDir: ctx.workspaceDir,
+      pluginEnvVars: ctx.pluginEnvVars,
       executeHook: ctx.deps.executeHook,
       emit: ctx.emit,
       signal: ctx.signal,
