@@ -152,3 +152,20 @@ describe("executeHook", () => {
     }
   });
 });
+
+describe("executeHook with a real shell", () => {
+  it("reports each line of output separately", async () => {
+    const outputs: HookOutput[] = [];
+
+    await executeHook("seed", "printf 'one\\ntwo\\n' && printf 'three' >&2", {
+      cwd: process.cwd(),
+      env: {},
+      onOutput: (o) => outputs.push(o),
+    });
+
+    expect(outputs).toContainEqual({ stream: "stdout", text: "one" });
+    expect(outputs).toContainEqual({ stream: "stdout", text: "two" });
+    expect(outputs).toContainEqual({ stream: "stderr", text: "three" });
+    expect(outputs).toHaveLength(3);
+  });
+});

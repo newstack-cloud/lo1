@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { platform } from "node:os";
 import { createLog } from "../debug";
 import { Lo1Error } from "../errors";
+import { followLines } from "../output/line-buffer";
 
 const debug = createLog("hooks");
 
@@ -70,17 +71,11 @@ export async function executeHook(
     signal: options.signal,
   });
 
-  if (options.onOutput && child.stdout) {
-    child.stdout.on("data", (chunk: Buffer) => {
-      options.onOutput!({ stream: "stdout", text: chunk.toString() });
-    });
-  }
-
-  if (options.onOutput && child.stderr) {
-    child.stderr.on("data", (chunk: Buffer) => {
-      options.onOutput!({ stream: "stderr", text: chunk.toString() });
-    });
-  }
+  const onOutput = options.onOutput;
+  if (onOutput && child.stdout)
+    followLines(child.stdout, (text) => onOutput({ stream: "stdout", text }));
+  if (onOutput && child.stderr)
+    followLines(child.stderr, (text) => onOutput({ stream: "stderr", text }));
 
   return new Promise<HookResult>((resolve, reject) => {
     child.on("error", (err) => {

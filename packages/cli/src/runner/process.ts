@@ -3,6 +3,7 @@ import { closeSync, openSync } from "node:fs";
 import { platform } from "node:os";
 import { createLog } from "../debug";
 import { Lo1Error } from "../errors";
+import { followLines } from "../output/line-buffer";
 
 const debug = createLog("runner:process");
 
@@ -143,16 +144,12 @@ export function startProcess(
     timestamp: new Date(),
   });
 
-  if (options.onOutput && child.stdout) {
-    child.stdout.on("data", (chunk: Buffer) => {
-      options.onOutput!(makeOutputLine("stdout", chunk.toString()));
-    });
+  const onOutput = options.onOutput;
+  if (onOutput && child.stdout) {
+    followLines(child.stdout, (line) => onOutput(makeOutputLine("stdout", line)));
   }
-
-  if (options.onOutput && child.stderr) {
-    child.stderr.on("data", (chunk: Buffer) => {
-      options.onOutput!(makeOutputLine("stderr", chunk.toString()));
-    });
+  if (onOutput && child.stderr) {
+    followLines(child.stderr, (line) => onOutput(makeOutputLine("stderr", line)));
   }
 
   const exitPromise = new Promise<number | null>((resolve) => {
