@@ -170,7 +170,8 @@ export async function startWorkspace(
   if (config.proxy?.tls?.enabled && caddyResult.internalDomains.length > 0) {
     debug("startWorkspace: trusting Caddy CA for %d domain(s)", caddyResult.internalDomains.length);
     emit({ kind: "phase", phase: "Trusting Caddy CA" });
-    await deps.trustCaddyCa(`${composeResult.projectName}-proxy`, workspaceDir);
+    const trust = await deps.trustCaddyCa(`${composeResult.projectName}-proxy`, workspaceDir);
+    if (trust?.warning) emit({ kind: "error", message: trust.warning });
   }
   timer.mark("infrastructure", infraLogs !== undefined);
 

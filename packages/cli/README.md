@@ -19,8 +19,8 @@ pnpm add -g @lo1/cli       # pnpm
 | `lo1 up`        | Start all services and infrastructure                           |
 | `lo1 down`      | Stop all services and infrastructure                            |
 | `lo1 status`    | Show status of all services                                     |
-| `lo1 hosts`     | Manage `/etc/hosts` entries for local domains                   |
-| `lo1 tls-setup` | Generate locally-trusted TLS certificates via mkcert            |
+| `lo1 hosts`     | Manage hosts file entries for local domains                     |
+| `lo1 tls-setup` | Trust lo1's local CA in the system and browser stores           |
 
 ## Usage
 

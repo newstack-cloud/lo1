@@ -35,6 +35,16 @@ https://github.com/user-attachments/assets/18325dca-ee9c-4f96-ae31-9b5c759e6f2b
 
 Docker Compose v2 is included with Docker Desktop (macOS/Windows) and modern Docker Engine (Linux).
 
+lo1 runs on macOS, Linux and Windows. On Windows, run it from PowerShell with Docker Desktop. Inside WSL 2, lo1 sets up the hosts file and certificate authority in Linux only, so browsers on Windows won't reach or trust the workspace.
+
+On Linux with TLS enabled, also install `certutil`, which lo1 uses to add its certificate authority to Chrome and Firefox. Those browsers don't read the system store:
+
+```bash
+sudo apt install libnss3-tools   # Debian, Ubuntu
+sudo dnf install nss-tools       # Fedora
+sudo pacman -S nss               # Arch
+```
+
 ## Quick Start
 
 lo1 runs on Node.js 24 or later. You can install it with npm, pnpm, Yarn or Bun, but Node.js is still needed: the `lo1` command runs on Node whichever package manager installed it.
@@ -97,6 +107,15 @@ The `@lo1/sdk` package publishes a [JSON Schema](./packages/sdk/schemas/lo1.v1.s
 Caddy's built-in CA issues the certificates, and `lo1 up` installs the root into
 the host trust store. Only the machine running lo1 trusts them, so other devices
 on the LAN will see certificate warnings.
+
+- macOS: your login keychain, which may show a password dialog the first time.
+- Linux: the system store (needs `sudo`), plus Chrome's and Firefox's stores when
+  `certutil` is installed.
+- Windows: your user's certificate store, after Windows asks you to confirm the
+  "Caddy Local Authority" certificate.
+
+On Windows, writing the hosts file needs administrator rights, so unless
+PowerShell is running as Administrator, `lo1 up` shows a UAC prompt.
 
 ### `acme`
 

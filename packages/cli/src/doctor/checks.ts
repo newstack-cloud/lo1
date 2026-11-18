@@ -6,7 +6,8 @@ import { loadWorkspaceConfig } from "../config/loader";
 import { readState } from "../orchestrator/state";
 import { collectDomains } from "../proxy/domains";
 import { getHostsFilePath } from "../hosts/index";
-import { getAcmeConfig, verifyAcmeEnv } from "../tls/acme";
+import { getAcmeConfig, isAcmeTls, verifyAcmeEnv } from "../tls/acme";
+import { NSS_TOOLS_HINT } from "../tls/setup";
 import { findPortConflicts, formatPortConflict, isPortInUse, type PortProbe } from "./ports";
 
 export type CheckStatus = "ok" | "warn" | "fail";
@@ -30,6 +31,7 @@ export type DoctorDeps = {
   readHostsFile: () => Promise<string>;
   probePort: PortProbe;
   env: NodeJS.ProcessEnv;
+  platform: string;
 };
 
 export const MIN_NODE_MAJOR = 24;
@@ -49,6 +51,7 @@ export function createDefaultDoctorDeps(configPath = "lo1.yaml"): DoctorDeps {
     readHostsFile: () => readFile(getHostsFilePath(), "utf-8"),
     probePort: isPortInUse,
     env: process.env,
+    platform: process.platform,
   };
 }
 
@@ -143,6 +146,35 @@ export function checkAcme(config: WorkspaceConfig, env: NodeJS.ProcessEnv): Chec
   }
 }
 
+/** On Linux, Chrome and Firefox only trust the local CA once certutil has added it to their stores. */
+export async function checkBrowserTrust(
+  config: WorkspaceConfig,
+  exec: ExecFn,
+  platform: string,
+): Promise<CheckResult | null> {
+  if (platform !== "linux") return null;
+  if (!config.proxy?.tls?.enabled || isAcmeTls(config)) return null;
+
+  try {
+    await exec("certutil", ["-H"]);
+  } catch (err) {
+    // certutil -H exits non-zero after printing its help, so only a missing binary counts.
+    if (isMissingCommand(err)) {
+      return {
+        id: "browser-trust",
+        status: "warn",
+        message: "certutil is not installed, so Chrome and Firefox won't trust the local CA",
+        fix: NSS_TOOLS_HINT,
+      };
+    }
+  }
+  return {
+    id: "browser-trust",
+    status: "ok",
+    message: "certutil is installed, so lo1 up can add the local CA to Chrome and Firefox",
+  };
+}
+
 export async function checkPorts(
   config: WorkspaceConfig,
   probe: PortProbe,
@@ -232,7 +264,11 @@ async function checkWorkspace(deps: DoctorDeps, workspaceDir: string): Promise<C
   const running = await deps.isWorkspaceRunning(workspaceDir);
   results.push(...(await checkPorts(config, deps.probePort, running)));
 
-  const optional = [await checkHosts(config, deps.readHostsFile), checkAcme(config, deps.env)];
+  const optional = [
+    await checkHosts(config, deps.readHostsFile),
+    checkAcme(config, deps.env),
+    await checkBrowserTrust(config, deps.exec, deps.platform),
+  ];
   for (const result of optional) if (result) results.push(result);
 
   return results;

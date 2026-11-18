@@ -37,6 +37,7 @@ function makeDeps(overrides: Partial<DoctorDeps> = {}): DoctorDeps {
     readHostsFile: async () => "127.0.0.1 localhost\n127.0.0.1 api.shop.local\n",
     probePort: async () => false,
     env: {},
+    platform: "darwin",
     ...overrides,
   };
 }
@@ -145,6 +146,61 @@ describe("runDoctor", () => {
     const results = await runDoctor(makeDeps({ loadConfig: async () => acmeConfig }));
 
     expect(byId(results, "acme")[0].status).toBe("fail");
+  });
+
+  describe("browser trust", () => {
+    const tlsConfig: WorkspaceConfig = {
+      ...config,
+      proxy: {
+        enabled: true,
+        port: 80,
+        tld: "local",
+        tls: { enabled: true, port: 443, mode: "internal" },
+      },
+    } as WorkspaceConfig;
+    const missing = Object.assign(new Error("spawn certutil ENOENT"), { code: "ENOENT" });
+
+    it("should warn on Linux when certutil is missing", async () => {
+      const exec = makeExec({
+        "docker version": "29.5.2\n",
+        "docker compose version": "2.40.0\n",
+        "git --version": "git version 2.50.1\n",
+        certutil: missing,
+      });
+      const results = await runDoctor(
+        makeDeps({ exec, platform: "linux", loadConfig: async () => tlsConfig }),
+      );
+
+      const [check] = byId(results, "browser-trust");
+      expect(check.status).toBe("warn");
+      expect(check.fix).toContain("libnss3-tools");
+    });
+
+    it("should pass on Linux when certutil exits non-zero after printing help", async () => {
+      const exec = makeExec({
+        "docker version": "29.5.2\n",
+        "docker compose version": "2.40.0\n",
+        "git --version": "git version 2.50.1\n",
+        certutil: new Error("exit code 1"),
+      });
+      const results = await runDoctor(
+        makeDeps({ exec, platform: "linux", loadConfig: async () => tlsConfig }),
+      );
+
+      expect(byId(results, "browser-trust")[0].status).toBe("ok");
+    });
+
+    it("should skip the check on macOS", async () => {
+      const results = await runDoctor(makeDeps({ loadConfig: async () => tlsConfig }));
+
+      expect(byId(results, "browser-trust")).toHaveLength(0);
+    });
+
+    it("should skip the check when TLS is off", async () => {
+      const results = await runDoctor(makeDeps({ platform: "linux" }));
+
+      expect(byId(results, "browser-trust")).toHaveLength(0);
+    });
   });
 });
 

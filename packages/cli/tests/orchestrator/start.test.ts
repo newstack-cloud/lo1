@@ -552,6 +552,26 @@ describe("startWorkspace", () => {
     expect(deps.trustCaddyCa).toHaveBeenCalledWith("lo1-my-platform-proxy", ".");
   });
 
+  it("should report a partial CA trust as an error event", async () => {
+    const config = makeConfig({
+      proxy: {
+        tld: "local",
+        port: 443,
+        enabled: true,
+        tls: { port: 443, enabled: true, mode: "internal" },
+      },
+    });
+    const deps = makeDeps({
+      loadConfig: mock(() => Promise.resolve(config)),
+      trustCaddyCa: mock(() => Promise.resolve({ warning: "certutil is missing" })),
+    });
+    const events: OrchestratorEvent[] = [];
+
+    await startWorkspace({ onEvent: (e) => events.push(e) }, deps);
+
+    expect(events).toContainEqual({ kind: "error", message: "certutil is missing" });
+  });
+
   it("should skip TLS trust when TLS is not enabled", async () => {
     const deps = makeDeps();
 

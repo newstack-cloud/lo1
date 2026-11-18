@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { platform } from "node:os";
 import {
+  buildElevatedCopyCommand,
   generateHostsBlock,
   replaceHostsBlock,
   removeHostsBlock,
@@ -95,5 +96,35 @@ describe("removeHostsBlock", () => {
     const result = removeHostsBlock(current);
 
     expect(result).toBe(current);
+  });
+});
+
+describe("buildElevatedCopyCommand", () => {
+  const powershell = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+
+  function innerCommand(command: string): string {
+    const encoded = command.match(/'-EncodedCommand','([^']+)'/)![1];
+    return Buffer.from(encoded, "base64").toString("utf16le");
+  }
+
+  it("should start an elevated PowerShell and exit with its exit code", () => {
+    const command = buildElevatedCopyCommand("C:\\Temp\\hosts", "C:\\etc\\hosts", powershell);
+
+    expect(command).toStartWith(`$p = Start-Process -FilePath '${powershell}' -Verb RunAs -Wait`);
+    expect(command).toEndWith("; exit $p.ExitCode");
+  });
+
+  it("should copy the staged file over the hosts file", () => {
+    const command = buildElevatedCopyCommand("C:\\Temp\\hosts", "C:\\etc\\hosts", powershell);
+
+    expect(innerCommand(command)).toBe(
+      "Copy-Item -LiteralPath 'C:\\Temp\\hosts' -Destination 'C:\\etc\\hosts' -Force -ErrorAction Stop",
+    );
+  });
+
+  it("should escape apostrophes in paths", () => {
+    const command = buildElevatedCopyCommand("C:\\Users\\o'neil\\hosts", "C:\\etc\\hosts", powershell);
+
+    expect(innerCommand(command)).toContain("'C:\\Users\\o''neil\\hosts'");
   });
 });

@@ -14,6 +14,7 @@ import type {
 } from "../runner/compose";
 import type { ComposeContext, ServiceHandle, StartServiceOptions } from "./service";
 import type { PortClaim } from "../doctor/ports";
+import type { TrustResult } from "../tls/setup";
 
 export type ServiceStatus = "starting" | "started" | "completed" | "stopping" | "stopped";
 
@@ -66,7 +67,7 @@ export type OrchestratorDeps = {
       onOutput?: (output: HookOutput) => void;
     },
   ) => Promise<HookResult>;
-  trustCaddyCa: (containerName: string, workspaceDir: string) => Promise<void>;
+  trustCaddyCa: (containerName: string, workspaceDir: string) => Promise<TrustResult | void>;
   readState: (workspaceDir?: string) => Promise<WorkspaceState | null>;
   writeState: (state: WorkspaceState, workspaceDir?: string) => Promise<void>;
   removeState: (workspaceDir?: string) => Promise<void>;

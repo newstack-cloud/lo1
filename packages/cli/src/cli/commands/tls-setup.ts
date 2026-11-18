@@ -2,7 +2,7 @@ import { unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { Command } from "commander";
 import type { WorkspaceConfig } from "@lo1/sdk";
-import { trustCaddyCa, TlsError } from "../../tls/setup";
+import { trustCaddyCa, TlsError, type TrustResult } from "../../tls/setup";
 import { isAcmeTls } from "../../tls/acme";
 import { readState } from "../../orchestrator/state";
 import { loadWorkspaceConfig } from "../../config/loader";
@@ -12,7 +12,7 @@ export type TlsSetupDeps = {
   readState: (workspaceDir: string) => Promise<WorkspaceState | null>;
   /** Returns null when the workspace has no readable config. */
   loadConfig: (workspaceDir: string) => Promise<WorkspaceConfig | null>;
-  trustCaddyCa: (containerName: string, workspaceDir: string) => Promise<void>;
+  trustCaddyCa: (containerName: string, workspaceDir: string) => Promise<TrustResult | void>;
   removeHashFile: (hashPath: string) => Promise<void>;
 };
 
@@ -37,7 +37,7 @@ function createDefaultDeps(): TlsSetupDeps {
   };
 }
 
-export type TlsSetupResult = { trusted: boolean; reason?: string };
+export type TlsSetupResult = { trusted: boolean; reason?: string; warning?: string };
 
 export async function runTlsSetup(
   workspaceDir: string,
@@ -63,8 +63,8 @@ export async function runTlsSetup(
   const containerName = `${state.projectName}-proxy`;
   const hashPath = join(workspaceDir, ".lo1", "caddy-root.crt.sha256");
   await deps.removeHashFile(hashPath);
-  await deps.trustCaddyCa(containerName, workspaceDir);
-  return { trusted: true };
+  const trust = await deps.trustCaddyCa(containerName, workspaceDir);
+  return { trusted: true, warning: trust?.warning };
 }
 
 export const tlsSetupCommand = new Command("tls-setup")
@@ -73,6 +73,10 @@ export const tlsSetupCommand = new Command("tls-setup")
     const result = await runTlsSetup(process.cwd());
     if (!result.trusted) {
       console.log(`Nothing to do. ${result.reason}`);
+      return;
+    }
+    if (result.warning) {
+      console.log(result.warning);
       return;
     }
     console.log("Done. Browsers will now trust local TLS certificates.");

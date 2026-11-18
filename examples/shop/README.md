@@ -17,7 +17,7 @@ cd shop
 lo1 up
 ```
 
-`lo1 up` asks for `sudo` once, to add `api.shop.local` and `web.shop.local` to your hosts file and trust lo1's local certificate authority. It then starts Postgres, runs `migrate` and `seed`, starts the API, waits for its health check, and starts the web app:
+`lo1 up` asks for `sudo` once, to add `api.shop.local` and `web.shop.local` to your hosts file and trust lo1's local certificate authority. On Linux, install `certutil` first (`sudo apt install libnss3-tools` on Debian and Ubuntu) so Chrome and Firefox trust it too. On Windows, a UAC prompt updates the hosts file unless PowerShell is running as Administrator, and Windows asks you to confirm the certificate; if Windows Firewall asks about Docker and Node.js, allow them on private networks. It then starts Postgres, runs `migrate` and `seed`, starts the API, waits for its health check, and starts the web app:
 
 ```
   Workspace shop is ready in 4.1s
