@@ -219,7 +219,8 @@ describe("formatDoctorReport", () => {
       "  ✓ Node.js 24.14.0\n" +
         "  ✗ Port 80 is in use\n      Stop it\n" +
         "  ! Hosts missing\n      Run lo1 up\n\n" +
-        "  1 problem, 1 warning.\n",
+        "  1 problem, 1 warning.\n" +
+        "  More help: https://lo1.dev/docs/troubleshooting\n",
     );
   });
 

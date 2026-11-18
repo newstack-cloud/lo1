@@ -1,6 +1,8 @@
 import { Command } from "commander";
 import { createDefaultDoctorDeps, runDoctor, type CheckResult } from "../../doctor/checks";
 
+export const TROUBLESHOOTING_URL = "https://lo1.dev/docs/troubleshooting";
+
 const SYMBOLS: Record<CheckResult["status"], string> = { ok: "✓", warn: "!", fail: "✗" };
 
 const COLORS: Record<CheckResult["status"], string> = {
@@ -22,14 +24,15 @@ export function formatDoctorReport(results: CheckResult[], useColor: boolean): s
 
   const failures = results.filter((r) => r.status === "fail").length;
   const warnings = results.filter((r) => r.status === "warn").length;
-  const summary =
-    failures === 0 && warnings === 0
-      ? "Everything looks good."
-      : [failures > 0 && plural(failures, "problem"), warnings > 0 && plural(warnings, "warning")]
-          .filter(Boolean)
-          .join(", ") + ".";
+  if (failures === 0 && warnings === 0) {
+    return `${lines.join("\n")}\n\n  Everything looks good.\n`;
+  }
 
-  return `${lines.join("\n")}\n\n  ${summary}\n`;
+  const summary =
+    [failures > 0 && plural(failures, "problem"), warnings > 0 && plural(warnings, "warning")]
+      .filter(Boolean)
+      .join(", ") + ".";
+  return `${lines.join("\n")}\n\n  ${summary}\n  More help: ${TROUBLESHOOTING_URL}\n`;
 }
 
 export const doctorCommand = new Command("doctor")
