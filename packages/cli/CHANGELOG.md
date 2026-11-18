@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/newstack-cloud/lo1/compare/cli/v0.5.0...cli/v0.5.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* **cli:** trust the local CA in browsers on Linux and elevate hosts writes on Windows ([83bf947](https://github.com/newstack-cloud/lo1/commit/83bf9471a9b308e753813286d5c7ee0edc2540ec))
+
 ## [0.5.0](https://github.com/newstack-cloud/lo1/compare/cli/v0.4.0...cli/v0.5.0) (2026-11-17)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "@lo1/plugin-celerity",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Celerity plugin for lo1 — blueprint-driven compose, provisioning, seeding, and runtime",
   "license": "Apache-2.0",
   "repository": {
