@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: notes
+      POSTGRES_PASSWORD: notes
+      POSTGRES_DB: notes
+    ports:
+      # An uncommon host port, so it doesn't clash with a local Postgres.
+      - "54331:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "notes"]
+      interval: 2s
+      retries: 15

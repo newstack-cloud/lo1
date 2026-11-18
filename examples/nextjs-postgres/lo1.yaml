@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://unpkg.com/@lo1/sdk/schemas/lo1.v1.schema.json
+#
+# A Next.js app reading from Postgres, with a migration and seed step.
+# Run `lo1 up`, then open https://web.nextjs-postgres.local.
+version: "1"
+name: nextjs-postgres
+
+# Postgres, as an ordinary Docker Compose file.
+extraCompose: ./infra.compose.yaml
+
+services:
+  # Init tasks run once, in dependency order, and must exit 0 before
+  # anything that depends on them starts.
+  migrate:
+    type: service
+    path: ./web
+    command: npm install --no-audit --no-fund --loglevel=error && node scripts/migrate.js
+    initTask: true
+    # Defined once here and reused below with *database.
+    env: &database
+      DATABASE_URL: postgres://notes:notes@localhost:54331/notes
+
+  seed:
+    type: service
+    path: ./web
+    command: node scripts/seed.js
+    initTask: true
+    dependsOn: [migrate]
+    env: *database
+
+  # The Next.js dev server. `type: app` is for a frontend; lo1 serves it at
+  # https://web.nextjs-postgres.local and passes the port in PORT.
+  web:
+    type: app
+    path: ./web
+    port: 4300
+    command: npx next dev
+    dependsOn: [seed]
+    env:
+      <<: *database
+      PORT: "4300"
+
+proxy:
+  tld: local
+  tls:
+    enabled: true
