@@ -157,7 +157,7 @@ async function writePrivileged(filePath: string, content: string): Promise<void>
   try {
     return await runWithStdin("/usr/bin/sudo", ["tee", filePath], content);
   } catch (err) {
-    throw new HostsError(`Failed to write ${filePath}: ${err.message}`);
+    throw new HostsError(`Failed to write ${filePath}: ${(err as Error).message}`);
   }
 }
 
