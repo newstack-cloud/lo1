@@ -20,7 +20,9 @@ jobs:
 
       - run: bun run format:check
 
-      - run: bun audit --audit-level high
+      # GHSA-fc5q-39xc-vjpf: picomatch ReDoS, reached only through typescript-eslint (dev only).
+      # No patched release exists yet; drop the --ignore once picomatch ships one.
+      - run: bun audit --audit-level high --ignore GHSA-fc5q-39xc-vjpf
 
       - run: bun run lint
 
