@@ -19,11 +19,11 @@ https://github.com/user-attachments/assets/18325dca-ee9c-4f96-ae31-9b5c759e6f2b
 
 ## Packages
 
-| Package                                      | Description                                                           |
-| -------------------------------------------- | --------------------------------------------------------------------- |
-| [`@lo1/cli`](./packages/cli)                 | CLI application — `lo1 init`, `lo1 up`, `lo1 down`, `lo1 status`      |
-| [`@lo1/sdk`](./packages/sdk)                 | Plugin SDK — types, config schemas, and utilities for plugin authors  |
-| [`@lo1/plugin-celerity`](./plugins/celerity) | Celerity plugin — blueprint-driven compose, provisioning, and seeding |
+| Package                                      | Description                                                                                                                |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| [`@lo1/cli`](./packages/cli)                 | The `lo1` command: `init`, `up`, `down`, `restart`, `status`, `logs`, `doctor`, `hosts` and `tls-setup`                    |
+| [`@lo1/sdk`](./packages/sdk)                 | Plugin SDK: types, config schemas and utilities for plugin authors, and the JSON Schema for `lo1.yaml`                     |
+| [`@lo1/plugin-celerity`](./plugins/celerity) | Celerity plugin: a placeholder for now, which loads but doesn't yet contribute compose services, provisioning or seed data |
 
 ## Prerequisites
 
