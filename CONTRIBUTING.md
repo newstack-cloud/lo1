@@ -2,7 +2,8 @@
 
 ## Prerequisites
 
-- Bun >= 1.1
+- Bun >= 1.4 (`bunfig.toml` needs it)
+- Node.js >= 24, to run the built CLI
 
 ## Getting Started
 
@@ -58,7 +59,7 @@ bun --filter @lo1/sdk add -D some-package
 bun --filter @lo1/cli add @lo1/sdk@workspace:*
 
 # Run a script in a specific package
-bun --filter @lo1/sdk run build
+bun run --filter @lo1/sdk build
 ```
 
 ## Testing
@@ -85,7 +86,7 @@ Coverage thresholds are enforced at the **aggregate** level (not per-file) via
 This project uses Zod to define the primary schema that is made available through the SDK. You can regenerate the accompanying JSON Schema by running:
 
 ```bash
-bun run build:schema
+bun run --filter @lo1/sdk build:schema
 ```
 
 _It also runs automatically on `bun run build`._
