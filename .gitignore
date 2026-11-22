@@ -7,3 +7,7 @@ eslint-report.json
 *.log
 .DS_Store
 .vscode/settings.json
+
+# Maintainers' working plans, kept out of version control.
+plan.md
+*-plan.md
