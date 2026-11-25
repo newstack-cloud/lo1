@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/newstack-cloud/lo1/compare/cli/v0.5.1...cli/v0.6.0) (2026-11-25)
+
+
+### Features
+
+* **cli:** link to the troubleshooting page from lo1 doctor ([f49eb2f](https://github.com/newstack-cloud/lo1/commit/f49eb2f390cc65b780609f3b325dc8f8cea757b9))
+
+
+### Bug Fixes
+
+* **cli:** fix type error in hosts file write ([a0b474a](https://github.com/newstack-cloud/lo1/commit/a0b474ae28fdae8b352e43c5825079986af9ae47))
+
 ## [0.5.1](https://github.com/newstack-cloud/lo1/compare/cli/v0.5.0...cli/v0.5.1) (2026-11-18)
 
 
