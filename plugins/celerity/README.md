@@ -1,6 +1,6 @@
 # @lo1/plugin-celerity
 
-[Celerity](https://celerityframework.io) plugin for [lo1](../../README.md) — blueprint-driven compose generation, infrastructure provisioning, data seeding, and runtime configuration.
+[Celerity](https://celerity.dev) plugin for [lo1](../../README.md) — blueprint-driven compose generation, infrastructure provisioning, data seeding, and runtime configuration.
 
 ## Installation
 
